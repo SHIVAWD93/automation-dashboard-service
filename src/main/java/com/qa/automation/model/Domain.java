@@ -2,35 +2,33 @@ package com.qa.automation.model;
 
 import jakarta.persistence.*;
 import java.time.LocalDateTime;
+import java.util.List;
 
 @Entity
-@Table(name = "testers")
-public class Tester {
+@Table(name = "domains")
+public class Domain {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(nullable = false)
+    @Column(nullable = false, unique = true)
     private String name;
 
-    @Column(nullable = false)
-    private String role;
+    @Column(nullable = false, columnDefinition = "TEXT")
+    private String description;
 
     @Column(nullable = false)
-    private String gender;
-
-    @Column(name = "experience", nullable = false)
-    private Integer experience = 0;
-
-    @Column(name = "profile_image_url")
-    private String profileImageUrl;
+    private String status;
 
     @Column(name = "created_at")
     private LocalDateTime createdAt;
 
     @Column(name = "updated_at")
     private LocalDateTime updatedAt;
+
+    @OneToMany(mappedBy = "domain", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
+    private List<Project> projects;
 
     @PrePersist
     protected void onCreate() {
@@ -44,13 +42,12 @@ public class Tester {
     }
 
     // Constructors
-    public Tester() {}
+    public Domain() {}
 
-    public Tester(String name, String role, String gender, Integer experience) {
+    public Domain(String name, String description, String status) {
         this.name = name;
-        this.role = role;
-        this.gender = gender;
-        this.experience = experience;
+        this.description = description;
+        this.status = status;
     }
 
     // Getters and Setters
@@ -70,36 +67,20 @@ public class Tester {
         this.name = name;
     }
 
-    public String getRole() {
-        return role;
+    public String getDescription() {
+        return description;
     }
 
-    public void setRole(String role) {
-        this.role = role;
+    public void setDescription(String description) {
+        this.description = description;
     }
 
-    public String getGender() {
-        return gender;
+    public String getStatus() {
+        return status;
     }
 
-    public void setGender(String gender) {
-        this.gender = gender;
-    }
-
-    public Integer getExperience() {
-        return experience;
-    }
-
-    public void setExperience(Integer experience) {
-        this.experience = experience;
-    }
-
-    public String getProfileImageUrl() {
-        return profileImageUrl;
-    }
-
-    public void setProfileImageUrl(String profileImageUrl) {
-        this.profileImageUrl = profileImageUrl;
+    public void setStatus(String status) {
+        this.status = status;
     }
 
     public LocalDateTime getCreatedAt() {
@@ -116,5 +97,13 @@ public class Tester {
 
     public void setUpdatedAt(LocalDateTime updatedAt) {
         this.updatedAt = updatedAt;
+    }
+
+    public List<Project> getProjects() {
+        return projects;
+    }
+
+    public void setProjects(List<Project> projects) {
+        this.projects = projects;
     }
 }
