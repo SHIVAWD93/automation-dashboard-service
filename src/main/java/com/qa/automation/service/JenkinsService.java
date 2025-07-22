@@ -87,6 +87,8 @@ public class JenkinsService {
             Long passedTests = jenkinsResultRepository.getTotalPassedTestsFromLatestBuilds();
             Long failedTests = jenkinsResultRepository.getTotalFailedTestsFromLatestBuilds();
 
+            totalTests=passedTests+failedTests;
+
             stats.put("totalTests", totalTests != null ? totalTests : 0);
             stats.put("passedTests", passedTests != null ? passedTests : 0);
             stats.put("failedTests", failedTests != null ? failedTests : 0);
