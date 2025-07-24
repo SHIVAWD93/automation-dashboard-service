@@ -71,12 +71,11 @@ public class WebSecurityConfig {
                 .csrf(csrf -> csrf.disable())
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(authz -> authz
-                        // Public endpoints - order matters, most specific first
+                        // Public endpoints
                         .requestMatchers("/api/auth/**").permitAll()
                         .requestMatchers("/h2-console/**").permitAll()
-                        .requestMatchers("/", "/static/**", "/index.html", "/favicon.ico").permitAll()
-                        .requestMatchers("/actuator/**").permitAll()
-                        .requestMatchers("/error").permitAll()
+                        .requestMatchers("/", "/static/**", "/index.html").permitAll()
+                        .requestMatchers("/actuator/health").permitAll()
                         // Role-based endpoints
                         .requestMatchers("/api/admin/**").hasRole("ADMIN")
                         .requestMatchers("/api/maintainer/**").hasAnyRole("ADMIN", "MAINTAINER")

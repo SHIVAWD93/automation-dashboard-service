@@ -30,12 +30,6 @@ public class AuthController {
         }
     }
 
-    // Alias for signin to support both /signin and /login endpoints
-    @PostMapping("/login")
-    public ResponseEntity<?> loginUser(@Valid @RequestBody LoginRequest loginRequest) {
-        return authenticateUser(loginRequest);
-    }
-
     @PostMapping("/signup")
     public ResponseEntity<?> registerUser(@Valid @RequestBody RegisterRequest registerRequest) {
         try {
