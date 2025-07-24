@@ -6,7 +6,6 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
-import java.util.Optional;
 
 @Repository
 public interface TesterRepository extends JpaRepository<Tester, Long> {
@@ -23,13 +22,4 @@ public interface TesterRepository extends JpaRepository<Tester, Long> {
     long countByRole(String role);
 
     long countByGender(String gender);
-
-    // Authentication methods
-    Optional<Tester> findByUsername(String username);
-
-    Optional<Tester> findByEmail(String email);
-
-    boolean existsByUsername(String username);
-
-    boolean existsByEmail(String email);
 }
