@@ -55,7 +55,7 @@ public class WebSecurityConfig {
     @Bean
     CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
-        configuration.setAllowedOriginPatterns(Arrays.asList("*"));
+        configuration.setAllowedOriginPatterns(Arrays.asList("http://localhost:*", "http://127.0.0.1:*", "http://0.0.0.0:*"));
         configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "OPTIONS"));
         configuration.setAllowedHeaders(Arrays.asList("*"));
         configuration.setAllowCredentials(true);
@@ -73,6 +73,8 @@ public class WebSecurityConfig {
                 .authorizeHttpRequests(authz -> authz
                         // Public endpoints - order matters, most specific first
                         .requestMatchers("/api/auth/**").permitAll()
+                        .requestMatchers("/api/simpleauth/**").permitAll()
+                        .requestMatchers("/api/test/**").permitAll()
                         .requestMatchers("/h2-console/**").permitAll()
                         .requestMatchers("/", "/static/**", "/index.html", "/favicon.ico").permitAll()
                         .requestMatchers("/actuator/**").permitAll()
