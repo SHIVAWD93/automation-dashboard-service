@@ -34,8 +34,7 @@ public class AuthTokenFilter extends OncePerRequestFilter {
         logger.debug("Processing request for path: {}", path);
         
         // Skip JWT processing for public endpoints
-        if (path.startsWith("/api/auth/") || path.equals("/") || path.startsWith("/h2-console/") || 
-            path.startsWith("/static/") || path.equals("/index.html") || path.equals("/actuator/health")) {
+        if (isPublicPath(path)) {
             logger.debug("Skipping JWT processing for public path: {}", path);
             filterChain.doFilter(request, response);
             return;
@@ -61,6 +60,16 @@ public class AuthTokenFilter extends OncePerRequestFilter {
         }
 
         filterChain.doFilter(request, response);
+    }
+
+    private boolean isPublicPath(String path) {
+        return path.startsWith("/api/auth/") || 
+               path.equals("/") || 
+               path.startsWith("/h2-console/") || 
+               path.startsWith("/static/") || 
+               path.equals("/index.html") || 
+               path.equals("/actuator/health") ||
+               path.startsWith("/actuator/");
     }
 
     private String parseJwt(HttpServletRequest request) {
