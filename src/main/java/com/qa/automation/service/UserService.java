@@ -6,9 +6,7 @@ import com.qa.automation.model.UserPermission;
 import com.qa.automation.repository.PermissionRepository;
 import com.qa.automation.repository.UserRepository;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
-import org.springframework.web.server.ResponseStatusException;
 
 @Service
 public class UserService {
@@ -25,11 +23,11 @@ public class UserService {
         Long permissionId = user != null ? user.getUserPermission() : null;
 
         if (permissionId == null) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Permission ID must not be null");
+            UserPermission readPermission = this.permissionRepository.findUserPermissionByPermission("read");
+            permissionId = readPermission.getId();
         }
 
-        UserPermission permission = permissionRepository.findById(permissionId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid permission ID: " + permissionId));
+        UserPermission permission = permissionRepository.findById(permissionId).get();
         User updatedUser = new User(user.getUserName(), user.getPassword(), user.getRole(), permission);
         return userRepository.save(updatedUser);
     }
