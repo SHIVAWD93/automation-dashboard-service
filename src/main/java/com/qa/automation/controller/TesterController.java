@@ -5,6 +5,7 @@ import com.qa.automation.service.TesterService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -18,12 +19,14 @@ public class TesterController {
     private TesterService testerService;
 
     @GetMapping
+    @PreAuthorize("hasRole('ADMIN') or hasRole('MAINTAINER')")
     public ResponseEntity<List<Tester>> getAllTesters() {
         List<Tester> testers = testerService.getAllTesters();
         return ResponseEntity.ok(testers);
     }
 
     @PostMapping
+    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<?> createTester(@RequestBody Tester tester) {
         try {
             Tester savedTester = testerService.createTester(tester);
@@ -34,6 +37,7 @@ public class TesterController {
     }
 
     @GetMapping("/{id}")
+    @PreAuthorize("hasRole('ADMIN') or hasRole('MAINTAINER')")
     public ResponseEntity<Tester> getTesterById(@PathVariable Long id) {
         Tester tester = testerService.getTesterById(id);
         if (tester != null) {
@@ -43,6 +47,7 @@ public class TesterController {
     }
 
     @PutMapping("/{id}")
+    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<?> updateTester(@PathVariable Long id, @RequestBody Tester tester) {
         try {
             Tester updatedTester = testerService.updateTester(id, tester);
@@ -56,6 +61,7 @@ public class TesterController {
     }
 
     @DeleteMapping("/{id}")
+    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<Void> deleteTester(@PathVariable Long id) {
         boolean deleted = testerService.deleteTester(id);
         if (deleted) {
@@ -65,12 +71,14 @@ public class TesterController {
     }
 
     @GetMapping("/role/{role}")
+    @PreAuthorize("hasRole('ADMIN') or hasRole('MAINTAINER')")
     public ResponseEntity<List<Tester>> getTestersByRole(@PathVariable String role) {
         List<Tester> testers = testerService.getTestersByRole(role);
         return ResponseEntity.ok(testers);
     }
 
     @GetMapping("/search")
+    @PreAuthorize("hasRole('ADMIN') or hasRole('MAINTAINER')")
     public ResponseEntity<List<Tester>> searchTesters(@RequestParam String name) {
         List<Tester> testers = testerService.searchTestersByName(name);
         return ResponseEntity.ok(testers);
