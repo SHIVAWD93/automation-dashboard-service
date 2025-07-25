@@ -24,10 +24,17 @@ public class UserService {
 
         if (permissionId == null) {
             UserPermission readPermission = this.permissionRepository.findUserPermissionByPermission("read");
+            if (readPermission == null) {
+                // Create default read permission if it doesn't exist
+                readPermission = new UserPermission();
+                readPermission.setPermission("read");
+                readPermission = permissionRepository.save(readPermission);
+            }
             permissionId = readPermission.getId();
         }
 
-        UserPermission permission = permissionRepository.findById(permissionId).get();
+        UserPermission permission = permissionRepository.findById(permissionId)
+                .orElseThrow(() -> new RuntimeException("Permission not found with id: " + permissionId));
         User updatedUser = new User(user.getUserName(), user.getPassword(), user.getRole(), permission);
         return userRepository.save(updatedUser);
     }

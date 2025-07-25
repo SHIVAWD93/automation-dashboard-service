@@ -7,6 +7,7 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
+import java.util.Optional;
 
 @Repository
 public interface ProjectRepository extends JpaRepository<Project, Long> {
@@ -14,6 +15,8 @@ public interface ProjectRepository extends JpaRepository<Project, Long> {
     long countByStatus(String status);
 
     List<Project> findByDomainId(Long domainId);
+
+    Optional<Project> findByName(String name);
 
     List<Project> findByDomainIdAndStatus(Long domainId, String status);
 

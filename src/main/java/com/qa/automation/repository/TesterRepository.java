@@ -6,6 +6,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
+import java.util.Optional;
 
 @Repository
 public interface TesterRepository extends JpaRepository<Tester, Long> {
@@ -13,6 +14,8 @@ public interface TesterRepository extends JpaRepository<Tester, Long> {
     List<Tester> findByRole(String role);
 
     List<Tester> findByGender(String gender);
+
+    Optional<Tester> findByEmail(String email);
 
     List<Tester> findByExperienceGreaterThanEqual(Integer experience);
 
