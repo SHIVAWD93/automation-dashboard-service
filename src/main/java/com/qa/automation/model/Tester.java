@@ -24,7 +24,7 @@ public class Tester {
     private Integer experience = 0;
 
     @Column(name = "profile_image_url")
-    private String profileImageUrl;
+    private String profileImage;
 
     @Column(name = "created_at")
     private LocalDateTime createdAt;
@@ -95,11 +95,11 @@ public class Tester {
     }
 
     public String getProfileImageUrl() {
-        return profileImageUrl;
+        return profileImage;
     }
 
     public void setProfileImageUrl(String profileImageUrl) {
-        this.profileImageUrl = profileImageUrl;
+        this.profileImage = profileImageUrl;
     }
 
     public LocalDateTime getCreatedAt() {

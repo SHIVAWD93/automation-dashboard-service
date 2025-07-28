@@ -26,7 +26,6 @@ public class UserService {
             UserPermission readPermission = this.permissionRepository.findUserPermissionByPermission("read");
             permissionId = readPermission.getId();
         }
-
         UserPermission permission = permissionRepository.findById(permissionId).get();
         User updatedUser = new User(user.getUserName(), user.getPassword(), user.getRole(), permission);
         return userRepository.save(updatedUser);
