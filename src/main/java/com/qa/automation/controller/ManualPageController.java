@@ -7,6 +7,7 @@ import com.qa.automation.model.Tester;
 import com.qa.automation.model.Domain;
 import com.qa.automation.service.ManualPageService;
 import com.qa.automation.service.JiraIntegrationService;
+import com.qa.automation.service.QTestService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -15,6 +16,8 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 import java.util.Map;
+import java.util.HashMap;
+import java.util.Date;
 
 @RestController
 @RequestMapping("/api/manual-page")
@@ -29,6 +32,9 @@ public class ManualPageController {
     @Autowired
     private JiraIntegrationService jiraIntegrationService;
 
+    @Autowired
+    private QTestService qTestService;
+
     /**
      * ENHANCED: Get all available sprints with optional project configuration
      */
@@ -42,6 +48,28 @@ public class ManualPageController {
             return ResponseEntity.ok(sprints);
         } catch (Exception e) {
             logger.error("Error fetching sprints: {}", e.getMessage(), e);
+            return ResponseEntity.internalServerError().build();
+        }
+    }
+
+    /**
+     * ENHANCED: Fetch and sync issues from a specific sprint with domain and project mapping
+     */
+    @PostMapping("/sprints/{sprintId}/sync-with-mapping")
+    public ResponseEntity<List<JiraIssueDto>> syncSprintIssuesWithMapping(
+            @PathVariable String sprintId,
+            @RequestParam(required = false) String jiraProjectKey,
+            @RequestParam(required = false) String jiraBoardId,
+            @RequestParam(required = false) Long domainId,
+            @RequestParam(required = false) Long projectId) {
+        try {
+            logger.info("Syncing issues for sprint: {} with domain/project mapping (Project: {}, Board: {}, Domain: {}, Project: {})",
+                    sprintId, jiraProjectKey, jiraBoardId, domainId, projectId);
+            List<JiraIssueDto> issues = manualPageService.fetchAndSyncSprintIssues(
+                    sprintId, jiraProjectKey, jiraBoardId, domainId, projectId);
+            return ResponseEntity.ok(issues);
+        } catch (Exception e) {
+            logger.error("Error syncing sprint issues with mapping: {}", e.getMessage(), e);
             return ResponseEntity.internalServerError().build();
         }
     }
@@ -239,6 +267,31 @@ public class ManualPageController {
                     "message", "Error testing connection: " + e.getMessage()
             );
             return ResponseEntity.ok(response);
+        }
+    }
+
+    /**
+     * NEW: Test QTest connection
+     */
+    @GetMapping("/qtest/test-connection")
+    public ResponseEntity<Map<String, Object>> testQTestConnection() {
+        try {
+            logger.info("Testing QTest connection");
+            
+            Map<String, Object> result = new HashMap<>();
+            boolean connected = qTestService.testConnection();
+            result.put("connected", connected);
+            result.put("message", connected ? "QTest connection successful" : "QTest connection failed");
+            result.put("timestamp", new Date());
+            
+            return ResponseEntity.ok(result);
+        } catch (Exception e) {
+            logger.error("Error testing QTest connection: {}", e.getMessage(), e);
+            Map<String, Object> result = new HashMap<>();
+            result.put("connected", false);
+            result.put("message", "Connection test failed: " + e.getMessage());
+            result.put("timestamp", new Date());
+            return ResponseEntity.ok(result);
         }
     }
 

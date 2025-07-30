@@ -260,12 +260,13 @@ public class JiraIntegrationService {
     }
 
     /**
-     * Parse global search response
+     * Parse global search response with detailed occurrence counting
      */
     private Map<String, Object> parseGlobalSearchResponse(String response, String keyword) {
         Map<String, Object> result = new HashMap<>();
         List<Map<String, Object>> matchingIssues = new ArrayList<>();
         int totalCount = 0;
+        int totalOccurrences = 0;
 
         try {
             JsonNode rootNode = objectMapper.readTree(response);
@@ -274,10 +275,14 @@ public class JiraIntegrationService {
 
             for (JsonNode issueNode : issuesNode) {
                 Map<String, Object> issue = new HashMap<>();
-                issue.put("key", issueNode.path("key").asText());
+                String issueKey = issueNode.path("key").asText();
+                issue.put("key", issueKey);
 
                 JsonNode fields = issueNode.path("fields");
-                issue.put("summary", fields.path("summary").asText());
+                String summary = fields.path("summary").asText();
+                String description = getTextValue(fields.path("description"));
+                
+                issue.put("summary", summary);
                 issue.put("issueType", fields.path("issuetype").path("name").asText());
                 issue.put("status", fields.path("status").path("name").asText());
 
@@ -286,15 +291,28 @@ public class JiraIntegrationService {
                     issue.put("priority", priorityNode.path("name").asText());
                 }
 
+                // Count keyword occurrences in this issue
+                int issueOccurrences = countKeywordOccurrences(summary, keyword) + 
+                                      countKeywordOccurrences(description, keyword);
+                
+                // Add comment occurrences
+                int commentOccurrences = searchKeywordInComments(issueKey, keyword);
+                issueOccurrences += commentOccurrences;
+                
+                issue.put("occurrences", issueOccurrences);
+                totalOccurrences += issueOccurrences;
+
                 matchingIssues.add(issue);
             }
 
             result.put("keyword", keyword);
             result.put("totalCount", totalCount);
+            result.put("totalOccurrences", totalOccurrences);
             result.put("matchingIssues", matchingIssues);
             result.put("searchDate", new Date());
 
-            logger.info("Global search for '{}' found {} matching issues", keyword, totalCount);
+            logger.info("Global search for '{}' found {} matching issues with {} total occurrences", 
+                    keyword, totalCount, totalOccurrences);
 
         } catch (Exception e) {
             logger.error("Error parsing global search response: {}", e.getMessage(), e);
@@ -305,12 +323,34 @@ public class JiraIntegrationService {
     }
 
     /**
+     * Count keyword occurrences in text
+     */
+    private int countKeywordOccurrences(String text, String keyword) {
+        if (text == null || keyword == null || text.isEmpty() || keyword.isEmpty()) {
+            return 0;
+        }
+        
+        String lowerText = text.toLowerCase();
+        String lowerKeyword = keyword.toLowerCase();
+        int count = 0;
+        int index = 0;
+        
+        while ((index = lowerText.indexOf(lowerKeyword, index)) != -1) {
+            count++;
+            index += lowerKeyword.length();
+        }
+        
+        return count;
+    }
+
+    /**
      * Create empty search result
      */
     private Map<String, Object> createEmptySearchResult(String keyword) {
         Map<String, Object> result = new HashMap<>();
         result.put("keyword", keyword);
         result.put("totalCount", 0);
+        result.put("totalOccurrences", 0);
         result.put("matchingIssues", new ArrayList<>());
         result.put("searchDate", new Date());
         return result;

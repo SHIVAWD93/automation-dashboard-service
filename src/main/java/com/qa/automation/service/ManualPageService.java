@@ -40,6 +40,47 @@ public class ManualPageService {
     @Autowired
     private DomainRepository domainRepository;
 
+    @Autowired
+    private QTestService qTestService;
+
+    /**
+     * ENHANCED: Fetch and sync issues from a specific sprint with domain and project mapping
+     */
+    public List<JiraIssueDto> fetchAndSyncSprintIssues(String sprintId, String jiraProjectKey, String jiraBoardId, Long domainId, Long projectId) {
+        logger.info("Fetching and syncing issues from sprint: {} with domain {} and project {} mapping",
+                sprintId, domainId, projectId);
+
+        // Fetch issues from Jira with optional project configuration
+        List<JiraIssueDto> jiraIssues = jiraIntegrationService.fetchIssuesFromSprint(
+                sprintId, jiraProjectKey, jiraBoardId);
+
+        // Find domain and project for mapping
+        Domain selectedDomain = null;
+        Project selectedProject = null;
+        
+        if (domainId != null) {
+            selectedDomain = domainRepository.findById(domainId).orElse(null);
+        }
+        
+        if (projectId != null) {
+            selectedProject = projectRepository.findById(projectId).orElse(null);
+        }
+
+        // Sync with database and apply mappings
+        List<JiraIssueDto> syncedIssues = new ArrayList<>();
+        for (JiraIssueDto issueDto : jiraIssues) {
+            try {
+                JiraIssueDto syncedIssue = syncIssueWithDomainAndProjectMapping(issueDto, selectedDomain, selectedProject);
+                syncedIssues.add(syncedIssue);
+            } catch (Exception e) {
+                logger.error("Error syncing issue {}: {}", issueDto.getJiraKey(), e.getMessage(), e);
+            }
+        }
+
+        logger.info("Synced {} issues for sprint {} with domain/project mapping", syncedIssues.size(), sprintId);
+        return syncedIssues;
+    }
+
     /**
      * ENHANCED: Fetch and sync issues from a specific sprint with optional project configuration
      */
@@ -234,6 +275,52 @@ public class ManualPageService {
     // Private helper methods
 
     /**
+     * Sync Jira issue with database and apply domain/project mapping
+     */
+    private JiraIssueDto syncIssueWithDomainAndProjectMapping(JiraIssueDto issueDto, Domain selectedDomain, Project selectedProject) {
+        JiraIssueDto syncedIssue = syncIssueWithDatabase(issueDto);
+        
+        // Apply domain and project mapping to linked test cases
+        if ((selectedDomain != null || selectedProject != null) && syncedIssue.getLinkedTestCases() != null) {
+            for (JiraTestCaseDto testCaseDto : syncedIssue.getLinkedTestCases()) {
+                if (testCaseDto.getId() != null) {
+                    Optional<JiraTestCase> optionalTestCase = jiraTestCaseRepository.findById(testCaseDto.getId());
+                    if (optionalTestCase.isPresent()) {
+                        JiraTestCase testCase = optionalTestCase.get();
+                        
+                        // Apply project mapping
+                        if (selectedProject != null) {
+                            testCase.setProject(selectedProject);
+                            // Set domain from project's domain
+                            if (selectedProject.getDomain() != null) {
+                                testCase.setDomainMapped(selectedProject.getDomain().getName());
+                            }
+                        } else if (selectedDomain != null) {
+                            // If only domain is selected, set domain mapping
+                            testCase.setDomainMapped(selectedDomain.getName());
+                        }
+                        
+                        jiraTestCaseRepository.save(testCase);
+                        
+                        // Update DTO
+                        if (selectedProject != null) {
+                            testCaseDto.setProjectId(selectedProject.getId());
+                            testCaseDto.setProjectName(selectedProject.getName());
+                        }
+                        if (selectedDomain != null) {
+                            testCaseDto.setDomainMapped(selectedDomain.getName());
+                        }
+                        
+                        logger.debug("Applied domain/project mapping to test case: {}", testCase.getQtestTitle());
+                    }
+                }
+            }
+        }
+        
+        return syncedIssue;
+    }
+
+    /**
      * Sync Jira issue with database
      */
     private JiraIssueDto syncIssueWithDatabase(JiraIssueDto issueDto) {
@@ -291,7 +378,7 @@ public class ManualPageService {
     }
 
     /**
-     * Sync linked test cases
+     * Sync linked test cases with enhanced QTest data retrieval
      */
     private void syncLinkedTestCases(JiraIssue issue, List<JiraTestCaseDto> testCaseDtos) {
         // Get existing test cases for this issue
@@ -306,8 +393,64 @@ public class ManualPageService {
                 testCase.setQtestTitle(testCaseDto.getQtestTitle());
                 testCase.setQtestId(testCaseDto.getQtestId());
                 testCase.setJiraIssue(issue);
+
+                // Enhanced: Fetch additional QTest data
+                enrichTestCaseWithQTestData(testCase, testCaseDto.getQtestTitle());
+
                 issue.addLinkedTestCase(testCase);
             }
+        }
+    }
+
+    /**
+     * Enrich test case with data from QTest
+     */
+    private void enrichTestCaseWithQTestData(JiraTestCase testCase, String qtestTitle) {
+        try {
+            // Search for the test case in QTest by title
+            List<Map<String, Object>> searchResults = qTestService.searchTestCasesByTitle(qtestTitle);
+            
+            if (!searchResults.isEmpty()) {
+                // Get the first matching test case
+                Map<String, Object> qtestData = searchResults.get(0);
+                String testCaseId = (String) qtestData.get("id");
+                
+                if (testCaseId != null) {
+                    // Fetch detailed test case information
+                    Map<String, Object> detailedTestCase = qTestService.fetchTestCaseDetails(testCaseId);
+                    
+                    if (!detailedTestCase.isEmpty()) {
+                        // Set QTest ID
+                        testCase.setQtestId(testCaseId);
+                        
+                        // Set assignee from QTest
+                        String assignee = (String) detailedTestCase.get("assignee");
+                        if (assignee != null && !assignee.isEmpty()) {
+                            testCase.setQtestAssignee(assignee);
+                        }
+                        
+                        // Set priority from QTest
+                        String priority = (String) detailedTestCase.get("priority");
+                        if (priority != null && !priority.isEmpty()) {
+                            testCase.setQtestPriority(priority);
+                        }
+                        
+                        // Set automation status from QTest
+                        String automationStatus = (String) detailedTestCase.get("automationStatus");
+                        if (automationStatus != null && !automationStatus.isEmpty()) {
+                            testCase.setQtestAutomationStatus(automationStatus);
+                        }
+                        
+                        logger.debug("Enriched test case '{}' with QTest data: assignee={}, priority={}, automationStatus={}",
+                                qtestTitle, assignee, priority, automationStatus);
+                    }
+                }
+            } else {
+                logger.debug("No matching QTest test case found for title: {}", qtestTitle);
+            }
+            
+        } catch (Exception e) {
+            logger.warn("Failed to enrich test case '{}' with QTest data: {}", qtestTitle, e.getMessage());
         }
     }
 
@@ -360,7 +503,12 @@ public class ManualPageService {
             testCase.setDescription("Test case imported from Jira issue: " + jiraTestCase.getJiraIssue().getJiraKey());
             testCase.setTestSteps("To be defined during automation implementation");
             testCase.setExpectedResult("To be defined during automation implementation");
-            testCase.setPriority("Medium");
+            
+            // Use QTest priority if available, otherwise default to Medium
+            String priority = (jiraTestCase.getQtestPriority() != null && !jiraTestCase.getQtestPriority().isEmpty()) 
+                ? jiraTestCase.getQtestPriority() : "Medium";
+            testCase.setPriority(priority);
+            
             testCase.setStatus("READY_TO_AUTOMATE");
             testCase.setProject(jiraTestCase.getProject());
             testCase.setTester(jiraTestCase.getAssignedTester());
@@ -378,8 +526,12 @@ public class ManualPageService {
         dto.setJiraKey(issue.getJiraKey());
         dto.setSummary(issue.getSummary());
         dto.setDescription(issue.getDescription());
-        dto.setAssignee(issue.getAssignee());
-        dto.setAssigneeDisplayName(issue.getAssigneeDisplayName());
+        // Enhanced: Prioritize QA tester names over Jira assignees
+        String effectiveAssignee = getEffectiveAssignee(issue);
+        String effectiveAssigneeDisplayName = getEffectiveAssigneeDisplayName(issue);
+        
+        dto.setAssignee(effectiveAssignee);
+        dto.setAssigneeDisplayName(effectiveAssigneeDisplayName);
         dto.setSprintId(issue.getSprintId());
         dto.setSprintName(issue.getSprintName());
         dto.setIssueType(issue.getIssueType());
@@ -407,6 +559,9 @@ public class ManualPageService {
         dto.setId(testCase.getId());
         dto.setQtestTitle(testCase.getQtestTitle());
         dto.setQtestId(testCase.getQtestId());
+        dto.setQtestAssignee(testCase.getQtestAssignee());
+        dto.setQtestPriority(testCase.getQtestPriority());
+        dto.setQtestAutomationStatus(testCase.getQtestAutomationStatus());
         dto.setCanBeAutomated(testCase.getCanBeAutomated());
         dto.setCannotBeAutomated(testCase.getCannotBeAutomated());
         dto.setAutomationStatus(testCase.getAutomationStatus());
@@ -428,5 +583,47 @@ public class ManualPageService {
         }
 
         return dto;
+    }
+
+    /**
+     * Get effective assignee prioritizing QA tester names
+     */
+    private String getEffectiveAssignee(JiraIssue issue) {
+        // Check if any linked test case has a QTest assignee
+        if (issue.getLinkedTestCases() != null && !issue.getLinkedTestCases().isEmpty()) {
+            for (JiraTestCase testCase : issue.getLinkedTestCases()) {
+                if (testCase.getQtestAssignee() != null && !testCase.getQtestAssignee().trim().isEmpty()) {
+                    return testCase.getQtestAssignee();
+                }
+                // Fallback to assigned tester if available
+                if (testCase.getAssignedTester() != null) {
+                    return testCase.getAssignedTester().getName();
+                }
+            }
+        }
+        
+        // Fallback to original Jira assignee
+        return issue.getAssignee();
+    }
+
+    /**
+     * Get effective assignee display name prioritizing QA tester names
+     */
+    private String getEffectiveAssigneeDisplayName(JiraIssue issue) {
+        // Check if any linked test case has a QTest assignee
+        if (issue.getLinkedTestCases() != null && !issue.getLinkedTestCases().isEmpty()) {
+            for (JiraTestCase testCase : issue.getLinkedTestCases()) {
+                if (testCase.getQtestAssignee() != null && !testCase.getQtestAssignee().trim().isEmpty()) {
+                    return testCase.getQtestAssignee(); // QTest assignee as display name
+                }
+                // Fallback to assigned tester if available
+                if (testCase.getAssignedTester() != null) {
+                    return testCase.getAssignedTester().getName();
+                }
+            }
+        }
+        
+        // Fallback to original Jira assignee display name
+        return issue.getAssigneeDisplayName();
     }
 }
