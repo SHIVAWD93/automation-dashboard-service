@@ -37,14 +37,19 @@ public class ManualPageService {
     @Autowired
     private TesterRepository testerRepository;
 
-    /**
-     * Fetch and sync issues from a specific sprint
-     */
-    public List<JiraIssueDto> fetchAndSyncSprintIssues(String sprintId) {
-        logger.info("Fetching and syncing issues from sprint: {}", sprintId);
+    @Autowired
+    private DomainRepository domainRepository;
 
-        // Fetch issues from Jira
-        List<JiraIssueDto> jiraIssues = jiraIntegrationService.fetchIssuesFromSprint(sprintId);
+    /**
+     * ENHANCED: Fetch and sync issues from a specific sprint with optional project configuration
+     */
+    public List<JiraIssueDto> fetchAndSyncSprintIssues(String sprintId, String jiraProjectKey, String jiraBoardId) {
+        logger.info("Fetching and syncing issues from sprint: {} (Project: {}, Board: {})",
+                sprintId, jiraProjectKey, jiraBoardId);
+
+        // Fetch issues from Jira with optional project configuration
+        List<JiraIssueDto> jiraIssues = jiraIntegrationService.fetchIssuesFromSprint(
+                sprintId, jiraProjectKey, jiraBoardId);
 
         // Sync with database
         List<JiraIssueDto> syncedIssues = new ArrayList<>();
@@ -62,6 +67,13 @@ public class ManualPageService {
     }
 
     /**
+     * Original method for backward compatibility
+     */
+    public List<JiraIssueDto> fetchAndSyncSprintIssues(String sprintId) {
+        return fetchAndSyncSprintIssues(sprintId, null, null);
+    }
+
+    /**
      * Get all saved issues for a sprint
      */
     public List<JiraIssueDto> getSprintIssues(String sprintId) {
@@ -75,7 +87,7 @@ public class ManualPageService {
      * Update test case automation flags
      */
     public JiraTestCaseDto updateTestCaseAutomationFlags(Long testCaseId, boolean canBeAutomated, boolean cannotBeAutomated) {
-        logger.info("Updating automation flags for test case {}: canAutomate={}, cannotAutomate={}", 
+        logger.info("Updating automation flags for test case {}: canAutomate={}, cannotAutomate={}",
                 testCaseId, canBeAutomated, cannotBeAutomated);
 
         Optional<JiraTestCase> optionalTestCase = jiraTestCaseRepository.findById(testCaseId);
@@ -108,14 +120,14 @@ public class ManualPageService {
         }
 
         JiraIssue issue = optionalIssue.get();
-        
+
         // Search for keyword in comments via Jira API
         int keywordCount = jiraIntegrationService.searchKeywordInComments(jiraKey, keyword);
-        
+
         // Update the issue
         issue.setKeywordCount(keywordCount);
         issue.setSearchKeyword(keyword);
-        
+
         JiraIssue savedIssue = jiraIssueRepository.save(issue);
         return convertToDto(savedIssue);
     }
@@ -125,13 +137,13 @@ public class ManualPageService {
      */
     public Map<String, Object> getSprintAutomationStatistics(String sprintId) {
         List<JiraTestCase> testCases = jiraTestCaseRepository.findBySprintId(sprintId);
-        
+
         Map<String, Object> stats = new HashMap<>();
         stats.put("totalTestCases", testCases.size());
         stats.put("readyToAutomate", testCases.stream().filter(tc -> tc.isReadyToAutomate()).count());
         stats.put("notAutomatable", testCases.stream().filter(tc -> tc.isNotAutomatable()).count());
         stats.put("pending", testCases.stream().filter(tc -> tc.isPending()).count());
-        
+
         // Group by project
         Map<String, Map<String, Long>> projectStats = testCases.stream()
                 .filter(tc -> tc.getProject() != null)
@@ -142,17 +154,24 @@ public class ManualPageService {
                                 Collectors.counting()
                         )
                 ));
-        
+
         stats.put("projectBreakdown", projectStats);
-        
+
         return stats;
     }
 
     /**
-     * Get all available sprints
+     * ENHANCED: Get all available sprints with optional project configuration
+     */
+    public List<Map<String, Object>> getAvailableSprints(String jiraProjectKey, String jiraBoardId) {
+        return jiraIntegrationService.fetchSprints(jiraProjectKey, jiraBoardId);
+    }
+
+    /**
+     * Original method for backward compatibility
      */
     public List<Map<String, Object>> getAvailableSprints() {
-        return jiraIntegrationService.fetchSprints();
+        return getAvailableSprints(null, null);
     }
 
     /**
@@ -160,6 +179,13 @@ public class ManualPageService {
      */
     public List<Project> getAllProjects() {
         return projectRepository.findAll();
+    }
+
+    /**
+     * NEW: Get all domains for filtering
+     */
+    public List<Domain> getAllDomains() {
+        return domainRepository.findAll();
     }
 
     /**
@@ -212,7 +238,7 @@ public class ManualPageService {
      */
     private JiraIssueDto syncIssueWithDatabase(JiraIssueDto issueDto) {
         Optional<JiraIssue> existingIssue = jiraIssueRepository.findByJiraKey(issueDto.getJiraKey());
-        
+
         JiraIssue issue;
         if (existingIssue.isPresent()) {
             // Update existing issue
@@ -224,10 +250,10 @@ public class ManualPageService {
         }
 
         JiraIssue savedIssue = jiraIssueRepository.save(issue);
-        
+
         // Sync linked test cases
         syncLinkedTestCases(savedIssue, issueDto.getLinkedTestCases());
-        
+
         return convertToDto(savedIssue);
     }
 
@@ -294,20 +320,20 @@ public class ManualPageService {
         try {
             // Check if we have project and tester assignment
             if (jiraTestCase.getProject() != null && jiraTestCase.getAssignedTester() != null) {
-                
+
                 // Create or update corresponding TestCase entity
                 TestCase automationTestCase = createOrUpdateAutomationTestCase(jiraTestCase);
-                
-                logger.info("Test case '{}' is ready for automation and assigned to tester: {}", 
-                        jiraTestCase.getQtestTitle(), 
+
+                logger.info("Test case '{}' is ready for automation and assigned to tester: {}",
+                        jiraTestCase.getQtestTitle(),
                         jiraTestCase.getAssignedTester().getName());
             } else {
-                logger.warn("Test case '{}' marked as automatable but missing project or tester assignment", 
+                logger.warn("Test case '{}' marked as automatable but missing project or tester assignment",
                         jiraTestCase.getQtestTitle());
             }
 
         } catch (Exception e) {
-            logger.error("Error processing automation readiness for test case '{}': {}", 
+            logger.error("Error processing automation readiness for test case '{}': {}",
                     jiraTestCase.getQtestTitle(), e.getMessage(), e);
         }
     }

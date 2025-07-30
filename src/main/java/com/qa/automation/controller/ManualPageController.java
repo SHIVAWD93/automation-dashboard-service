@@ -4,6 +4,7 @@ import com.qa.automation.dto.JiraIssueDto;
 import com.qa.automation.dto.JiraTestCaseDto;
 import com.qa.automation.model.Project;
 import com.qa.automation.model.Tester;
+import com.qa.automation.model.Domain;
 import com.qa.automation.service.ManualPageService;
 import com.qa.automation.service.JiraIntegrationService;
 import org.slf4j.Logger;
@@ -29,13 +30,15 @@ public class ManualPageController {
     private JiraIntegrationService jiraIntegrationService;
 
     /**
-     * Get all available sprints
+     * ENHANCED: Get all available sprints with optional project configuration
      */
     @GetMapping("/sprints")
-    public ResponseEntity<List<Map<String, Object>>> getAvailableSprints() {
+    public ResponseEntity<List<Map<String, Object>>> getAvailableSprints(
+            @RequestParam(required = false) String jiraProjectKey,
+            @RequestParam(required = false) String jiraBoardId) {
         try {
-            logger.info("Fetching available sprints");
-            List<Map<String, Object>> sprints = manualPageService.getAvailableSprints();
+            logger.info("Fetching available sprints (Project: {}, Board: {})", jiraProjectKey, jiraBoardId);
+            List<Map<String, Object>> sprints = manualPageService.getAvailableSprints(jiraProjectKey, jiraBoardId);
             return ResponseEntity.ok(sprints);
         } catch (Exception e) {
             logger.error("Error fetching sprints: {}", e.getMessage(), e);
@@ -44,13 +47,18 @@ public class ManualPageController {
     }
 
     /**
-     * Fetch and sync issues from a specific sprint
+     * ENHANCED: Fetch and sync issues from a specific sprint with optional project configuration
      */
     @PostMapping("/sprints/{sprintId}/sync")
-    public ResponseEntity<List<JiraIssueDto>> syncSprintIssues(@PathVariable String sprintId) {
+    public ResponseEntity<List<JiraIssueDto>> syncSprintIssues(
+            @PathVariable String sprintId,
+            @RequestParam(required = false) String jiraProjectKey,
+            @RequestParam(required = false) String jiraBoardId) {
         try {
-            logger.info("Syncing issues for sprint: {}", sprintId);
-            List<JiraIssueDto> issues = manualPageService.fetchAndSyncSprintIssues(sprintId);
+            logger.info("Syncing issues for sprint: {} (Project: {}, Board: {})",
+                    sprintId, jiraProjectKey, jiraBoardId);
+            List<JiraIssueDto> issues = manualPageService.fetchAndSyncSprintIssues(
+                    sprintId, jiraProjectKey, jiraBoardId);
             return ResponseEntity.ok(issues);
         } catch (Exception e) {
             logger.error("Error syncing sprint issues: {}", e.getMessage(), e);
@@ -83,8 +91,8 @@ public class ManualPageController {
         try {
             logger.info("Updating automation flags for test case: {}", testCaseId);
             JiraTestCaseDto updatedTestCase = manualPageService.updateTestCaseAutomationFlags(
-                    testCaseId, 
-                    request.getCanBeAutomated(), 
+                    testCaseId,
+                    request.getCanBeAutomated(),
                     request.getCannotBeAutomated()
             );
             return ResponseEntity.ok(updatedTestCase);
@@ -102,11 +110,11 @@ public class ManualPageController {
             @PathVariable Long testCaseId,
             @RequestBody TestCaseMappingRequest request) {
         try {
-            logger.info("Mapping test case {} to project {} and tester {}", 
+            logger.info("Mapping test case {} to project {} and tester {}",
                     testCaseId, request.getProjectId(), request.getTesterId());
             JiraTestCaseDto updatedTestCase = manualPageService.mapTestCaseToProject(
-                    testCaseId, 
-                    request.getProjectId(), 
+                    testCaseId,
+                    request.getProjectId(),
                     request.getTesterId()
             );
             return ResponseEntity.ok(updatedTestCase);
@@ -129,6 +137,24 @@ public class ManualPageController {
             return ResponseEntity.ok(updatedIssue);
         } catch (Exception e) {
             logger.error("Error searching keyword in comments: {}", e.getMessage(), e);
+            return ResponseEntity.badRequest().build();
+        }
+    }
+
+    /**
+     * NEW: Global keyword search across all issues
+     */
+    @PostMapping("/global-keyword-search")
+    public ResponseEntity<Map<String, Object>> globalKeywordSearch(
+            @RequestBody GlobalKeywordSearchRequest request) {
+        try {
+            logger.info("Performing global keyword search for '{}' in project: {}",
+                    request.getKeyword(), request.getJiraProjectKey());
+            Map<String, Object> searchResults = jiraIntegrationService.searchKeywordGlobally(
+                    request.getKeyword(), request.getJiraProjectKey());
+            return ResponseEntity.ok(searchResults);
+        } catch (Exception e) {
+            logger.error("Error performing global keyword search: {}", e.getMessage(), e);
             return ResponseEntity.badRequest().build();
         }
     }
@@ -159,6 +185,21 @@ public class ManualPageController {
             return ResponseEntity.ok(projects);
         } catch (Exception e) {
             logger.error("Error getting projects: {}", e.getMessage(), e);
+            return ResponseEntity.internalServerError().build();
+        }
+    }
+
+    /**
+     * NEW: Get all domains for filtering
+     */
+    @GetMapping("/domains")
+    public ResponseEntity<List<Domain>> getAllDomains() {
+        try {
+            logger.info("Getting all domains for filtering");
+            List<Domain> domains = manualPageService.getAllDomains();
+            return ResponseEntity.ok(domains);
+        } catch (Exception e) {
+            logger.error("Error getting domains: {}", e.getMessage(), e);
             return ResponseEntity.internalServerError().build();
         }
     }
@@ -253,6 +294,28 @@ public class ManualPageController {
 
         public void setKeyword(String keyword) {
             this.keyword = keyword;
+        }
+    }
+
+    // NEW: Global keyword search request
+    public static class GlobalKeywordSearchRequest {
+        private String keyword;
+        private String jiraProjectKey;
+
+        public String getKeyword() {
+            return keyword;
+        }
+
+        public void setKeyword(String keyword) {
+            this.keyword = keyword;
+        }
+
+        public String getJiraProjectKey() {
+            return jiraProjectKey;
+        }
+
+        public void setJiraProjectKey(String jiraProjectKey) {
+            this.jiraProjectKey = jiraProjectKey;
         }
     }
 }

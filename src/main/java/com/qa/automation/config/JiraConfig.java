@@ -26,6 +26,19 @@ public class JiraConfig {
     @Value("${jira.board.id:}")
     private String jiraBoardId;
 
+    // qTest configuration properties
+    @Value("${qtest.url:}")
+    private String qtestUrl;
+
+    @Value("${qtest.username:}")
+    private String qtestUsername;
+
+    @Value("${qtest.password:}")
+    private String qtestPassword;
+
+    @Value("${qtest.project.id:}")
+    private String qtestProjectId;
+
     @Bean
     public WebClient jiraWebClient() {
         // Increase memory limit for large Jira responses
@@ -37,7 +50,7 @@ public class JiraConfig {
 
         return WebClient.builder()
                 .baseUrl(jiraUrl)
-                .defaultHeader(HttpHeaders.AUTHORIZATION, getBasicAuthHeader())
+                .defaultHeader(HttpHeaders.AUTHORIZATION, getJiraBasicAuthHeader())
                 .defaultHeader(HttpHeaders.CONTENT_TYPE, "application/json")
                 .defaultHeader(HttpHeaders.ACCEPT, "application/json")
                 .exchangeStrategies(strategies)
@@ -46,22 +59,41 @@ public class JiraConfig {
 
     @Bean
     public WebClient qtestWebClient() {
+        // Increase memory limit for large qTest responses
+        ExchangeStrategies strategies = ExchangeStrategies.builder()
+                .codecs(configurer -> configurer
+                        .defaultCodecs()
+                        .maxInMemorySize(16 * 1024 * 1024)) // 16MB
+                .build();
+
         return WebClient.builder()
+                .baseUrl(qtestUrl)
+                .defaultHeader(HttpHeaders.AUTHORIZATION, getQTestBasicAuthHeader())
                 .defaultHeader(HttpHeaders.CONTENT_TYPE, "application/json")
                 .defaultHeader(HttpHeaders.ACCEPT, "application/json")
+                .exchangeStrategies(strategies)
                 .build();
     }
 
-    private String getBasicAuthHeader() {
-        if (jiraUsername == null || jiraToken == null || 
-            jiraUsername.isEmpty() || jiraToken.isEmpty()) {
+    private String getJiraBasicAuthHeader() {
+        if (jiraUsername == null || jiraToken == null ||
+                jiraUsername.isEmpty() || jiraToken.isEmpty()) {
             return "";
         }
         String credentials = jiraUsername + ":" + jiraToken;
         return "Basic " + Base64.getEncoder().encodeToString(credentials.getBytes());
     }
 
-    // Getters for configuration values
+    private String getQTestBasicAuthHeader() {
+        if (qtestUsername == null || qtestPassword == null ||
+                qtestUsername.isEmpty() || qtestPassword.isEmpty()) {
+            return "";
+        }
+        String credentials = qtestUsername + ":" + qtestPassword;
+        return "Basic " + Base64.getEncoder().encodeToString(credentials.getBytes());
+    }
+
+    // Jira getters
     public String getJiraUrl() {
         return jiraUrl;
     }
@@ -82,9 +114,38 @@ public class JiraConfig {
         return jiraBoardId;
     }
 
-    public boolean isConfigured() {
+    // qTest getters
+    public String getQtestUrl() {
+        return qtestUrl;
+    }
+
+    public String getQtestUsername() {
+        return qtestUsername;
+    }
+
+    public String getQtestPassword() {
+        return qtestPassword;
+    }
+
+    public String getQtestProjectId() {
+        return qtestProjectId;
+    }
+
+    // Configuration validation methods
+    public boolean isJiraConfigured() {
         return jiraUrl != null && !jiraUrl.isEmpty() &&
-               jiraUsername != null && !jiraUsername.isEmpty() &&
-               jiraToken != null && !jiraToken.isEmpty();
+                jiraUsername != null && !jiraUsername.isEmpty() &&
+                jiraToken != null && !jiraToken.isEmpty();
+    }
+
+    public boolean isQTestConfigured() {
+        return qtestUrl != null && !qtestUrl.isEmpty() &&
+                qtestUsername != null && !qtestUsername.isEmpty() &&
+                qtestPassword != null && !qtestPassword.isEmpty();
+    }
+
+    // Legacy method for backward compatibility
+    public boolean isConfigured() {
+        return isJiraConfigured();
     }
 }

@@ -26,6 +26,13 @@ public class Project {
     @JsonIgnoreProperties("projects")
     private Domain domain;
 
+    // NEW: Jira configuration fields
+    @Column(name = "jira_project_key")
+    private String jiraProjectKey;
+
+    @Column(name = "jira_board_id")
+    private String jiraBoardId;
+
     @Column(name = "created_at")
     private LocalDateTime createdAt;
 
@@ -51,6 +58,13 @@ public class Project {
         this.description = description;
         this.status = status;
         this.domain = domain;
+    }
+
+    public Project(String name, String description, String status, Domain domain,
+                   String jiraProjectKey, String jiraBoardId) {
+        this(name, description, status, domain);
+        this.jiraProjectKey = jiraProjectKey;
+        this.jiraBoardId = jiraBoardId;
     }
 
     // Getters and Setters
@@ -94,6 +108,23 @@ public class Project {
         this.domain = domain;
     }
 
+    // NEW: Jira configuration getters/setters
+    public String getJiraProjectKey() {
+        return jiraProjectKey;
+    }
+
+    public void setJiraProjectKey(String jiraProjectKey) {
+        this.jiraProjectKey = jiraProjectKey;
+    }
+
+    public String getJiraBoardId() {
+        return jiraBoardId;
+    }
+
+    public void setJiraBoardId(String jiraBoardId) {
+        this.jiraBoardId = jiraBoardId;
+    }
+
     public LocalDateTime getCreatedAt() {
         return createdAt;
     }
@@ -108,5 +139,26 @@ public class Project {
 
     public void setUpdatedAt(LocalDateTime updatedAt) {
         this.updatedAt = updatedAt;
+    }
+
+    // Utility methods
+    public boolean hasJiraConfiguration() {
+        return jiraProjectKey != null && !jiraProjectKey.trim().isEmpty() &&
+                jiraBoardId != null && !jiraBoardId.trim().isEmpty();
+    }
+
+    @Override
+    public String toString() {
+        return "Project{" +
+                "id=" + id +
+                ", name='" + name + '\'' +
+                ", description='" + description + '\'' +
+                ", status='" + status + '\'' +
+                ", domain=" + (domain != null ? domain.getName() : "null") +
+                ", jiraProjectKey='" + jiraProjectKey + '\'' +
+                ", jiraBoardId='" + jiraBoardId + '\'' +
+                ", createdAt=" + createdAt +
+                ", updatedAt=" + updatedAt +
+                '}';
     }
 }
