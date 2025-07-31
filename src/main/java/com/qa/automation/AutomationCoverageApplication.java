@@ -6,6 +6,7 @@ import com.qa.automation.model.UserPermission;
 import com.qa.automation.repository.PermissionRepository;
 import com.qa.automation.repository.TesterRepository;
 import com.qa.automation.repository.UserRepository;
+import com.qa.automation.service.DataInitializationService;
 import java.security.Permission;
 import java.time.LocalDateTime;
 import org.springframework.boot.CommandLineRunner;
@@ -19,12 +20,17 @@ public class AutomationCoverageApplication {
         SpringApplication.run(AutomationCoverageApplication.class, args);
     }
     @Bean
-    CommandLineRunner initDatabase(PermissionRepository repository, UserRepository userRepository) {
+    CommandLineRunner initDatabase(PermissionRepository repository, UserRepository userRepository, DataInitializationService dataInitService) {
         return args -> {
+            // Initialize permissions and users first
             repository.save(new UserPermission( 1L,"read", LocalDateTime.now(),LocalDateTime.now()));
             repository.save(new UserPermission( 2L,"write", LocalDateTime.now(),LocalDateTime.now()));
             userRepository.save(new User("admin","admin","admin",repository.findById(2L).get()));
-            System.out.println("Testers preloaded");
+            
+            // Initialize basic data to prevent constraint violations
+            dataInitService.initializeBasicData();
+            
+            System.out.println("Database initialization completed");
         };
     }
 }

@@ -43,6 +43,9 @@ public class ManualPageService {
     @Autowired
     private QTestService qTestService;
 
+    @Autowired
+    private DataInitializationService dataInitializationService;
+
     /**
      * ENHANCED: Fetch and sync issues from a specific sprint with domain and project mapping
      */
@@ -249,7 +252,7 @@ public class ManualPageService {
 
         JiraTestCase testCase = optionalTestCase.get();
 
-        // Set project
+        // Set project with validation
         if (projectId != null) {
             Optional<Project> optionalProject = projectRepository.findById(projectId);
             if (optionalProject.isPresent()) {
@@ -257,14 +260,22 @@ public class ManualPageService {
                 if (optionalProject.get().getDomain() != null) {
                     testCase.setDomainMapped(optionalProject.get().getDomain().getName());
                 }
+                logger.debug("Mapped test case {} to project: {}", testCaseId, optionalProject.get().getName());
+            } else {
+                logger.warn("Project with ID {} does not exist, skipping project mapping for test case: {}", projectId, testCaseId);
+                throw new RuntimeException("Project not found with id: " + projectId);
             }
         }
 
-        // Set tester
+        // Set tester with validation
         if (testerId != null) {
             Optional<Tester> optionalTester = testerRepository.findById(testerId);
             if (optionalTester.isPresent()) {
                 testCase.setAssignedTester(optionalTester.get());
+                logger.debug("Assigned test case {} to tester: {}", testCaseId, optionalTester.get().getName());
+            } else {
+                logger.warn("Tester with ID {} does not exist, skipping tester assignment for test case: {}", testerId, testCaseId);
+                throw new RuntimeException("Tester not found with id: " + testerId);
             }
         }
 
@@ -288,19 +299,37 @@ public class ManualPageService {
                     if (optionalTestCase.isPresent()) {
                         JiraTestCase testCase = optionalTestCase.get();
                         
-                        // Apply project mapping
-                        if (selectedProject != null) {
-                            testCase.setProject(selectedProject);
-                            // Set domain from project's domain
-                            if (selectedProject.getDomain() != null) {
-                                testCase.setDomainMapped(selectedProject.getDomain().getName());
-                            }
-                        } else if (selectedDomain != null) {
-                            // If only domain is selected, set domain mapping
-                            testCase.setDomainMapped(selectedDomain.getName());
-                        }
-                        
-                        jiraTestCaseRepository.save(testCase);
+                                                 // Apply project mapping with validation
+                         if (selectedProject != null) {
+                             // Validate that the project exists in database
+                             Optional<Project> validProject = projectRepository.findById(selectedProject.getId());
+                             if (validProject.isPresent()) {
+                                 testCase.setProject(validProject.get());
+                                 // Set domain from project's domain
+                                 if (validProject.get().getDomain() != null) {
+                                     testCase.setDomainMapped(validProject.get().getDomain().getName());
+                                 }
+                                                           } else {
+                                  logger.warn("Selected project with ID {} does not exist, using default project for test case: {}", 
+                                          selectedProject.getId(), testCase.getQtestTitle());
+                                  // Use default project as fallback
+                                  Project defaultProject = dataInitializationService.getDefaultProject();
+                                  testCase.setProject(defaultProject);
+                                  if (defaultProject.getDomain() != null) {
+                                      testCase.setDomainMapped(defaultProject.getDomain().getName());
+                                  }
+                              }
+                         } else if (selectedDomain != null) {
+                             // If only domain is selected, set domain mapping
+                             testCase.setDomainMapped(selectedDomain.getName());
+                         }
+                         
+                         try {
+                             jiraTestCaseRepository.save(testCase);
+                         } catch (Exception e) {
+                             logger.error("Failed to save test case {}: {}", testCase.getQtestTitle(), e.getMessage());
+                             // Continue processing other test cases
+                         }
                         
                         // Update DTO
                         if (selectedProject != null) {
@@ -318,6 +347,63 @@ public class ManualPageService {
         }
         
         return syncedIssue;
+    }
+
+    /**
+     * Fix existing test cases with invalid foreign key references
+     */
+    public void fixOrphanedTestCases() {
+        logger.info("Checking and fixing orphaned test cases...");
+        
+        try {
+            List<JiraTestCase> allTestCases = jiraTestCaseRepository.findAll();
+            Project defaultProject = dataInitializationService.getDefaultProject();
+            Tester defaultTester = dataInitializationService.getDefaultTester();
+            
+            int fixedCount = 0;
+            
+            for (JiraTestCase testCase : allTestCases) {
+                boolean needsSave = false;
+                
+                // Check if project reference is valid
+                if (testCase.getProject() != null) {
+                    Optional<Project> projectCheck = projectRepository.findById(testCase.getProject().getId());
+                    if (projectCheck.isEmpty()) {
+                        logger.warn("Test case {} has invalid project reference, fixing with default project", 
+                                testCase.getQtestTitle());
+                        testCase.setProject(defaultProject);
+                        testCase.setDomainMapped(defaultProject.getDomain().getName());
+                        needsSave = true;
+                    }
+                }
+                
+                // Check if tester reference is valid
+                if (testCase.getAssignedTester() != null) {
+                    Optional<Tester> testerCheck = testerRepository.findById(testCase.getAssignedTester().getId());
+                    if (testerCheck.isEmpty()) {
+                        logger.warn("Test case {} has invalid tester reference, fixing with default tester", 
+                                testCase.getQtestTitle());
+                        testCase.setAssignedTester(defaultTester);
+                        testCase.setAssignedTesterId(defaultTester.getId());
+                        needsSave = true;
+                    }
+                }
+                
+                if (needsSave) {
+                    try {
+                        jiraTestCaseRepository.save(testCase);
+                        fixedCount++;
+                    } catch (Exception e) {
+                        logger.error("Failed to fix test case {}: {}", testCase.getQtestTitle(), e.getMessage());
+                    }
+                }
+            }
+            
+            logger.info("Fixed {} orphaned test cases", fixedCount);
+            
+        } catch (Exception e) {
+            logger.error("Error while fixing orphaned test cases: {}", e.getMessage(), e);
+        }
     }
 
     /**

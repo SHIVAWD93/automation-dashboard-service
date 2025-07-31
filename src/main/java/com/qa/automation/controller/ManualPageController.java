@@ -295,6 +295,31 @@ public class ManualPageController {
         }
     }
 
+    /**
+     * NEW: Fix orphaned test cases with invalid foreign key references
+     */
+    @PostMapping("/maintenance/fix-orphaned-test-cases")
+    public ResponseEntity<Map<String, Object>> fixOrphanedTestCases() {
+        try {
+            logger.info("Triggering fix for orphaned test cases");
+            manualPageService.fixOrphanedTestCases();
+            
+            Map<String, Object> result = new HashMap<>();
+            result.put("success", true);
+            result.put("message", "Orphaned test cases fix completed");
+            result.put("timestamp", new Date());
+            
+            return ResponseEntity.ok(result);
+        } catch (Exception e) {
+            logger.error("Error fixing orphaned test cases: {}", e.getMessage(), e);
+            Map<String, Object> result = new HashMap<>();
+            result.put("success", false);
+            result.put("message", "Fix failed: " + e.getMessage());
+            result.put("timestamp", new Date());
+            return ResponseEntity.ok(result);
+        }
+    }
+
     // Request DTOs
     public static class AutomationFlagsRequest {
         private boolean canBeAutomated;
