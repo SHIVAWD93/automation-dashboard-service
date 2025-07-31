@@ -382,6 +382,79 @@ public class JenkinsController {
 //        }
 //    }
 
+    /**
+     * Update notes for a Jenkins result
+     */
+    @PutMapping("/results/{id}/notes")
+    public ResponseEntity<Map<String, Object>> updateJenkinsResultNotes(
+            @PathVariable Long id,
+            @RequestBody NotesUpdateRequest request) {
+        try {
+            String notes = request.getNotes();
+            
+            Optional<JenkinsResult> optionalResult = jenkinsResultRepository.findById(id);
+            if (optionalResult.isEmpty()) {
+                Map<String, Object> response = new HashMap<>();
+                response.put("success", false);
+                response.put("message", "Jenkins result not found with id: " + id);
+                return ResponseEntity.notFound().build();
+            }
+            
+            JenkinsResult result = optionalResult.get();
+            result.setNotes(notes);
+            jenkinsResultRepository.save(result);
+            
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", true);
+            response.put("message", "Notes updated successfully");
+            response.put("id", id);
+            response.put("notes", notes);
+            response.put("timestamp", new Date());
+            
+            return ResponseEntity.ok(response);
+            
+        } catch (Exception e) {
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", false);
+            response.put("message", "Failed to update notes: " + e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
+        }
+    }
+
+    /**
+     * Get notes for a Jenkins result
+     */
+    @GetMapping("/results/{id}/notes")
+    public ResponseEntity<Map<String, Object>> getJenkinsResultNotes(@PathVariable Long id) {
+        try {
+            Optional<JenkinsResult> optionalResult = jenkinsResultRepository.findById(id);
+            if (optionalResult.isEmpty()) {
+                Map<String, Object> response = new HashMap<>();
+                response.put("success", false);
+                response.put("message", "Jenkins result not found with id: " + id);
+                return ResponseEntity.notFound().build();
+            }
+            
+            JenkinsResult result = optionalResult.get();
+            
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", true);
+            response.put("id", id);
+            response.put("notes", result.getNotes());
+            response.put("jobName", result.getJobName());
+            response.put("buildNumber", result.getBuildNumber());
+            response.put("timestamp", new Date());
+            
+            return ResponseEntity.ok(response);
+            
+        } catch (Exception e) {
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", false);
+            response.put("message", "Failed to get notes: " + e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
+        }
+    }
+
     // Health check endpoint for the controller
     @GetMapping("/health")
     public ResponseEntity<Map<String, Object>> healthCheck() {
@@ -390,5 +463,20 @@ public class JenkinsController {
         health.put("timestamp", new Date());
         health.put("service", "Jenkins Controller");
         return ResponseEntity.ok(health);
+    }
+
+    // Request DTOs
+    public static class NotesUpdateRequest {
+        private String notes;
+
+        public NotesUpdateRequest() {}
+
+        public String getNotes() {
+            return notes;
+        }
+
+        public void setNotes(String notes) {
+            this.notes = notes;
+        }
     }
 }
