@@ -492,7 +492,19 @@ public class ManualPageService {
      * Enrich test case with data from QTest
      */
     private void enrichTestCaseWithQTestData(JiraTestCase testCase, String qtestTitle) {
+        // Check if QTest service is available and configured
+        if (!jiraConfig.isQTestConfigured()) {
+            logger.debug("QTest not configured, skipping enrichment for test case: {}", qtestTitle);
+            return;
+        }
+
         try {
+            // Check if QTest is authenticated before attempting to search
+            if (!qTestService.isAuthenticated() && !qTestService.testConnection()) {
+                logger.debug("QTest authentication not available, skipping enrichment for test case: {}", qtestTitle);
+                return;
+            }
+
             // Search for the test case in QTest by title
             List<Map<String, Object>> searchResults = qTestService.searchTestCasesByTitle(qtestTitle);
             
@@ -536,7 +548,7 @@ public class ManualPageService {
             }
             
         } catch (Exception e) {
-            logger.warn("Failed to enrich test case '{}' with QTest data: {}", qtestTitle, e.getMessage());
+            logger.debug("Failed to enrich test case '{}' with QTest data: {}", qtestTitle, e.getMessage());
         }
     }
 

@@ -30,6 +30,8 @@ public class QTestService {
 
     private String accessToken;
     private long tokenExpiryTime;
+    private boolean authenticationFailed = false;
+    private long lastAuthFailTime = 0;
 
     /**
      * Login to QTest and obtain access token
@@ -46,6 +48,7 @@ public class QTestService {
             loginRequest.put("password", jiraConfig.getQtestPassword());
 
             logger.info("Attempting to login to QTest for user: {}", jiraConfig.getQtestUsername());
+            logger.debug("QTest URL: {}", jiraConfig.getQtestUrl());
 
             String response = qtestWebClient.post()
                     .uri("/api/login")
@@ -58,6 +61,11 @@ public class QTestService {
             JsonNode responseNode = objectMapper.readTree(response);
             this.accessToken = responseNode.path("access_token").asText();
             
+            if (accessToken == null || accessToken.isEmpty()) {
+                logger.error("No access token received from QTest login response");
+                return false;
+            }
+            
             // Set token expiry (typically 1 hour, but we'll refresh every 50 minutes)
             this.tokenExpiryTime = System.currentTimeMillis() + (50 * 60 * 1000);
 
@@ -66,6 +74,15 @@ public class QTestService {
 
         } catch (WebClientResponseException e) {
             logger.error("Login to QTest failed: {} - {}", e.getStatusCode(), e.getResponseBodyAsString());
+            
+            // Provide specific guidance for common issues
+            if (e.getStatusCode().value() == 401) {
+                logger.error("QTest Authentication Failed - Please check:");
+                logger.error("1. Username: {}", jiraConfig.getQtestUsername());
+                logger.error("2. Password is correct");
+                logger.error("3. QTest URL is correct: {}", jiraConfig.getQtestUrl());
+                logger.error("4. Account is not locked or requires 2FA");
+            }
             return false;
         } catch (Exception e) {
             logger.error("Unexpected error during QTest login: {}", e.getMessage(), e);
@@ -77,8 +94,21 @@ public class QTestService {
      * Check if current token is valid and refresh if needed
      */
     private boolean ensureValidToken() {
+        // Don't retry authentication if it failed recently (within 5 minutes)
+        if (authenticationFailed && (System.currentTimeMillis() - lastAuthFailTime) < 300000) {
+            logger.debug("Skipping QTest authentication - recent failure detected");
+            return false;
+        }
+        
         if (accessToken == null || System.currentTimeMillis() >= tokenExpiryTime) {
-            return loginToQTest();
+            boolean success = loginToQTest();
+            if (!success) {
+                authenticationFailed = true;
+                lastAuthFailTime = System.currentTimeMillis();
+            } else {
+                authenticationFailed = false;
+            }
+            return success;
         }
         return true;
     }
@@ -251,7 +281,23 @@ public class QTestService {
      * Test QTest connection and authentication
      */
     public boolean testConnection() {
+        if (!jiraConfig.isQTestConfigured()) {
+            logger.debug("QTest configuration incomplete - cannot test connection");
+            return false;
+        }
+        
+        // Reset authentication failure state for connection test
+        authenticationFailed = false;
         return loginToQTest();
+    }
+
+    /**
+     * Force retry authentication (clears failure state)
+     */
+    public void retryAuthentication() {
+        authenticationFailed = false;
+        lastAuthFailTime = 0;
+        accessToken = null;
     }
 
     /**
