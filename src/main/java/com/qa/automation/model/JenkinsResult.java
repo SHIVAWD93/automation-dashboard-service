@@ -45,6 +45,9 @@ public class JenkinsResult {
     @Column(name = "updated_at")
     private LocalDateTime updatedAt;
 
+    @Column(name = "notes", columnDefinition = "TEXT")
+    private String notes;
+
     @OneToMany(mappedBy = "jenkinsResult", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
     private List<JenkinsTestCase> testCases;
 
@@ -171,5 +174,13 @@ public class JenkinsResult {
 
     public void setTestCases(List<JenkinsTestCase> testCases) {
         this.testCases = testCases;
+    }
+
+    public String getNotes() {
+        return notes;
+    }
+
+    public void setNotes(String notes) {
+        this.notes = notes;
     }
 }
