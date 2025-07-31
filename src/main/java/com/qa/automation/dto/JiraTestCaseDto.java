@@ -6,6 +6,9 @@ public class JiraTestCaseDto {
     private Long id;
     private String qtestTitle;
     private String qtestId;
+    private String qtestAssignee;
+    private String qtestPriority;
+    private String qtestAutomationStatus;
     private Boolean canBeAutomated;
     private Boolean cannotBeAutomated;
     private String automationStatus;
@@ -51,6 +54,30 @@ public class JiraTestCaseDto {
 
     public void setQtestId(String qtestId) {
         this.qtestId = qtestId;
+    }
+
+    public String getQtestAssignee() {
+        return qtestAssignee;
+    }
+
+    public void setQtestAssignee(String qtestAssignee) {
+        this.qtestAssignee = qtestAssignee;
+    }
+
+    public String getQtestPriority() {
+        return qtestPriority;
+    }
+
+    public void setQtestPriority(String qtestPriority) {
+        this.qtestPriority = qtestPriority;
+    }
+
+    public String getQtestAutomationStatus() {
+        return qtestAutomationStatus;
+    }
+
+    public void setQtestAutomationStatus(String qtestAutomationStatus) {
+        this.qtestAutomationStatus = qtestAutomationStatus;
     }
 
     public Boolean getCanBeAutomated() {

@@ -18,6 +18,15 @@ public class JiraTestCase {
     @Column(name = "qtest_id")
     private String qtestId;
 
+    @Column(name = "qtest_assignee")
+    private String qtestAssignee;
+
+    @Column(name = "qtest_priority")
+    private String qtestPriority;
+
+    @Column(name = "qtest_automation_status")
+    private String qtestAutomationStatus;
+
     @Column(name = "can_be_automated", nullable = false)
     private Boolean canBeAutomated = false;
 
@@ -116,6 +125,30 @@ public class JiraTestCase {
 
     public void setQtestId(String qtestId) {
         this.qtestId = qtestId;
+    }
+
+    public String getQtestAssignee() {
+        return qtestAssignee;
+    }
+
+    public void setQtestAssignee(String qtestAssignee) {
+        this.qtestAssignee = qtestAssignee;
+    }
+
+    public String getQtestPriority() {
+        return qtestPriority;
+    }
+
+    public void setQtestPriority(String qtestPriority) {
+        this.qtestPriority = qtestPriority;
+    }
+
+    public String getQtestAutomationStatus() {
+        return qtestAutomationStatus;
+    }
+
+    public void setQtestAutomationStatus(String qtestAutomationStatus) {
+        this.qtestAutomationStatus = qtestAutomationStatus;
     }
 
     public Boolean getCanBeAutomated() {

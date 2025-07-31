@@ -66,9 +66,11 @@ public class JiraConfig {
                         .maxInMemorySize(16 * 1024 * 1024)) // 16MB
                 .build();
 
+        // Create base WebClient without authentication headers (will be added per request)
+        String baseUrl = (qtestUrl != null && !qtestUrl.isEmpty()) ? qtestUrl : "http://localhost";
+        
         return WebClient.builder()
-                .baseUrl(qtestUrl)
-                .defaultHeader(HttpHeaders.AUTHORIZATION, getQTestBasicAuthHeader())
+                .baseUrl(baseUrl)
                 .defaultHeader(HttpHeaders.CONTENT_TYPE, "application/json")
                 .defaultHeader(HttpHeaders.ACCEPT, "application/json")
                 .exchangeStrategies(strategies)
