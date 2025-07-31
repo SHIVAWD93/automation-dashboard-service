@@ -36,6 +36,9 @@ public class JiraConfig {
     @Value("${qtest.password:}")
     private String qtestPassword;
 
+    @Value("${qtest.token:}")
+    private String qtestToken;
+
     @Value("${qtest.project.id:}")
     private String qtestProjectId;
 
@@ -129,6 +132,10 @@ public class JiraConfig {
         return qtestPassword;
     }
 
+    public String getQtestToken() {
+        return qtestToken;
+    }
+
     public String getQtestProjectId() {
         return qtestProjectId;
     }
@@ -143,7 +150,8 @@ public class JiraConfig {
     public boolean isQTestConfigured() {
         return qtestUrl != null && !qtestUrl.isEmpty() &&
                 qtestUsername != null && !qtestUsername.isEmpty() &&
-                qtestPassword != null && !qtestPassword.isEmpty();
+                ((qtestPassword != null && !qtestPassword.isEmpty()) ||
+                 (qtestToken != null && !qtestToken.isEmpty()));
     }
 
     // Legacy method for backward compatibility

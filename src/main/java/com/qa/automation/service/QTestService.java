@@ -34,7 +34,7 @@ public class QTestService {
     private long lastAuthFailTime = 0;
 
     /**
-     * Login to QTest and obtain access token
+     * Login to QTest and obtain access token (supports both token and password auth)
      */
     public boolean loginToQTest() {
         if (!jiraConfig.isQTestConfigured()) {
@@ -42,6 +42,17 @@ public class QTestService {
             return false;
         }
 
+        // If token is provided, use it directly
+        if (jiraConfig.getQtestToken() != null && !jiraConfig.getQtestToken().isEmpty()) {
+            logger.info("Using provided QTest token for authentication");
+            this.accessToken = jiraConfig.getQtestToken();
+            // Set token expiry (assume token is long-lived, check every hour)
+            this.tokenExpiryTime = System.currentTimeMillis() + (60 * 60 * 1000);
+            logger.info("Successfully configured QTest with provided token");
+            return true;
+        }
+
+        // Fallback to username/password authentication
         try {
             Map<String, String> loginRequest = new HashMap<>();
             loginRequest.put("username", jiraConfig.getQtestUsername());
@@ -69,7 +80,7 @@ public class QTestService {
             // Set token expiry (typically 1 hour, but we'll refresh every 50 minutes)
             this.tokenExpiryTime = System.currentTimeMillis() + (50 * 60 * 1000);
 
-            logger.info("Successfully logged in to QTest");
+            logger.info("Successfully logged in to QTest using username/password");
             return true;
 
         } catch (WebClientResponseException e) {
@@ -79,9 +90,10 @@ public class QTestService {
             if (e.getStatusCode().value() == 401) {
                 logger.error("QTest Authentication Failed - Please check:");
                 logger.error("1. Username: {}", jiraConfig.getQtestUsername());
-                logger.error("2. Password is correct");
+                logger.error("2. Password/Token is correct");
                 logger.error("3. QTest URL is correct: {}", jiraConfig.getQtestUrl());
                 logger.error("4. Account is not locked or requires 2FA");
+                logger.error("5. Consider using qtest.token instead of username/password");
             }
             return false;
         } catch (Exception e) {

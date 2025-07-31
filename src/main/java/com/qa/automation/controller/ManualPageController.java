@@ -353,6 +353,8 @@ public class ManualPageController {
             config.put("username", jiraConfig.getQtestUsername());
             config.put("projectId", jiraConfig.getQtestProjectId());
             config.put("hasPassword", jiraConfig.getQtestPassword() != null && !jiraConfig.getQtestPassword().isEmpty());
+            config.put("hasToken", jiraConfig.getQtestToken() != null && !jiraConfig.getQtestToken().isEmpty());
+            config.put("authMethod", (jiraConfig.getQtestToken() != null && !jiraConfig.getQtestToken().isEmpty()) ? "token" : "password");
             result.put("configuration", config);
             
             // Troubleshooting guidance
@@ -369,9 +371,11 @@ public class ManualPageController {
                 recommendations.add("Set qtest.username in application.properties");
             }
             
-            if (jiraConfig.getQtestPassword() == null || jiraConfig.getQtestPassword().isEmpty()) {
-                issues.add("QTest password not configured");
-                recommendations.add("Set qtest.password in application.properties");
+            if ((jiraConfig.getQtestPassword() == null || jiraConfig.getQtestPassword().isEmpty()) && 
+                (jiraConfig.getQtestToken() == null || jiraConfig.getQtestToken().isEmpty())) {
+                issues.add("QTest authentication not configured");
+                recommendations.add("Set either qtest.password OR qtest.token in application.properties");
+                recommendations.add("Token authentication is recommended for better security");
             }
             
             if (jiraConfig.getQtestProjectId() == null || jiraConfig.getQtestProjectId().isEmpty()) {
