@@ -8,6 +8,7 @@ import com.qa.automation.model.Domain;
 import com.qa.automation.service.ManualPageService;
 import com.qa.automation.service.JiraIntegrationService;
 import com.qa.automation.service.QTestService;
+import com.qa.automation.config.JiraConfig;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -18,6 +19,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.HashMap;
 import java.util.Date;
+import java.util.List;
+import java.util.ArrayList;
 
 @RestController
 @RequestMapping("/api/manual-page")
@@ -34,6 +37,9 @@ public class ManualPageController {
 
     @Autowired
     private QTestService qTestService;
+
+    @Autowired
+    private JiraConfig jiraConfig;
 
     /**
      * ENHANCED: Get all available sprints with optional project configuration
@@ -283,6 +289,7 @@ public class ManualPageController {
             result.put("connected", connected);
             result.put("message", connected ? "QTest connection successful" : "QTest connection failed");
             result.put("timestamp", new Date());
+            result.put("authenticated", qTestService.isAuthenticated());
             
             return ResponseEntity.ok(result);
         } catch (Exception e) {
@@ -290,6 +297,133 @@ public class ManualPageController {
             Map<String, Object> result = new HashMap<>();
             result.put("connected", false);
             result.put("message", "Connection test failed: " + e.getMessage());
+            result.put("timestamp", new Date());
+            result.put("authenticated", false);
+            return ResponseEntity.ok(result);
+        }
+    }
+
+    /**
+     * NEW: Retry QTest authentication
+     */
+    @PostMapping("/qtest/retry-auth")
+    public ResponseEntity<Map<String, Object>> retryQTestAuthentication() {
+        try {
+            logger.info("Retrying QTest authentication");
+            
+            qTestService.retryAuthentication();
+            boolean connected = qTestService.testConnection();
+            
+            Map<String, Object> result = new HashMap<>();
+            result.put("success", connected);
+            result.put("message", connected ? "QTest authentication successful" : "QTest authentication failed");
+            result.put("timestamp", new Date());
+            result.put("authenticated", qTestService.isAuthenticated());
+            
+            return ResponseEntity.ok(result);
+        } catch (Exception e) {
+            logger.error("Error retrying QTest authentication: {}", e.getMessage(), e);
+            Map<String, Object> result = new HashMap<>();
+            result.put("success", false);
+            result.put("message", "Authentication retry failed: " + e.getMessage());
+            result.put("timestamp", new Date());
+            result.put("authenticated", false);
+            return ResponseEntity.ok(result);
+        }
+    }
+
+    /**
+     * NEW: Get QTest configuration status and troubleshooting info
+     */
+    @GetMapping("/qtest/status")
+    public ResponseEntity<Map<String, Object>> getQTestStatus() {
+        try {
+            logger.info("Checking QTest configuration status");
+            
+            Map<String, Object> result = new HashMap<>();
+            
+            // Check configuration
+            boolean configured = jiraConfig.isQTestConfigured();
+            result.put("configured", configured);
+            result.put("authenticated", qTestService.isAuthenticated());
+            
+            // Configuration details (without sensitive info)
+            Map<String, Object> config = new HashMap<>();
+            config.put("url", jiraConfig.getQtestUrl());
+            config.put("username", jiraConfig.getQtestUsername());
+            config.put("projectId", jiraConfig.getQtestProjectId());
+            config.put("hasPassword", jiraConfig.getQtestPassword() != null && !jiraConfig.getQtestPassword().isEmpty());
+            config.put("hasToken", jiraConfig.getQtestToken() != null && !jiraConfig.getQtestToken().isEmpty());
+            config.put("authMethod", (jiraConfig.getQtestToken() != null && !jiraConfig.getQtestToken().isEmpty()) ? "token" : "password");
+            result.put("configuration", config);
+            
+            // Troubleshooting guidance
+            List<String> issues = new ArrayList<>();
+            List<String> recommendations = new ArrayList<>();
+            
+            if (jiraConfig.getQtestUrl() == null || jiraConfig.getQtestUrl().isEmpty()) {
+                issues.add("QTest URL not configured");
+                recommendations.add("Set qtest.url in application.properties");
+            }
+            
+            if (jiraConfig.getQtestUsername() == null || jiraConfig.getQtestUsername().isEmpty()) {
+                issues.add("QTest username not configured");
+                recommendations.add("Set qtest.username in application.properties");
+            }
+            
+            if ((jiraConfig.getQtestPassword() == null || jiraConfig.getQtestPassword().isEmpty()) && 
+                (jiraConfig.getQtestToken() == null || jiraConfig.getQtestToken().isEmpty())) {
+                issues.add("QTest authentication not configured");
+                recommendations.add("Set either qtest.password OR qtest.token in application.properties");
+                recommendations.add("Token authentication is recommended for better security");
+            }
+            
+            if (jiraConfig.getQtestProjectId() == null || jiraConfig.getQtestProjectId().isEmpty()) {
+                issues.add("QTest project ID not configured");
+                recommendations.add("Set qtest.project.id in application.properties");
+            }
+            
+            if (configured && !qTestService.isAuthenticated()) {
+                issues.add("Authentication failed - check credentials");
+                recommendations.add("Verify username and password are correct");
+                recommendations.add("Check if account requires 2FA or is locked");
+                recommendations.add("Verify QTest URL is accessible");
+            }
+            
+            result.put("issues", issues);
+            result.put("recommendations", recommendations);
+            result.put("timestamp", new Date());
+            
+            return ResponseEntity.ok(result);
+        } catch (Exception e) {
+            logger.error("Error checking QTest status: {}", e.getMessage(), e);
+            Map<String, Object> result = new HashMap<>();
+            result.put("error", "Status check failed: " + e.getMessage());
+            result.put("timestamp", new Date());
+            return ResponseEntity.ok(result);
+        }
+    }
+
+    /**
+     * NEW: Fix orphaned test cases with invalid foreign key references
+     */
+    @PostMapping("/maintenance/fix-orphaned-test-cases")
+    public ResponseEntity<Map<String, Object>> fixOrphanedTestCases() {
+        try {
+            logger.info("Triggering fix for orphaned test cases");
+            manualPageService.fixOrphanedTestCases();
+            
+            Map<String, Object> result = new HashMap<>();
+            result.put("success", true);
+            result.put("message", "Orphaned test cases fix completed");
+            result.put("timestamp", new Date());
+            
+            return ResponseEntity.ok(result);
+        } catch (Exception e) {
+            logger.error("Error fixing orphaned test cases: {}", e.getMessage(), e);
+            Map<String, Object> result = new HashMap<>();
+            result.put("success", false);
+            result.put("message", "Fix failed: " + e.getMessage());
             result.put("timestamp", new Date());
             return ResponseEntity.ok(result);
         }
