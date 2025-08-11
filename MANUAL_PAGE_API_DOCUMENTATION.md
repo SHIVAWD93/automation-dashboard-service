@@ -269,6 +269,46 @@ Get available projects and testers for mapping.
 ]
 ```
 
+## Global Keyword Search
+
+**Endpoint:** `POST /api/manual-page/global-keyword-search`
+
+**Description:** Search for a keyword across all issues in a project with optional sprint filtering.
+
+**Request Body:**
+```json
+{
+    "keyword": "string",           // Required: The keyword to search for
+    "jiraProjectKey": "string",    // Optional: JIRA project key (defaults to configured project)
+    "sprintId": "string"           // Optional: Sprint ID for sprint-specific search
+}
+```
+
+**Response:**
+```json
+{
+    "keyword": "string",
+    "totalCount": 0,
+    "totalOccurrences": 0,
+    "matchingIssues": [
+        {
+            "key": "string",
+            "summary": "string",
+            "issueType": "string",
+            "status": "string",
+            "priority": "string",
+            "occurrences": 0
+        }
+    ],
+    "searchDate": "2024-01-01T00:00:00.000Z"
+}
+```
+
+**Enhanced Features:**
+- **Sprint Filtering**: When `sprintId` is provided, search is limited to issues within that specific sprint
+- **Cross-reference Comments**: Searches through issue comments for keyword occurrences
+- **QTest Integration**: Automatically fetches linked test cases from QTest instead of extracting from JIRA text patterns
+
 ## Automation Readiness Flow
 
 When a test case is marked as "Can be Automated" (and "Cannot be Automated" is false), the system automatically:

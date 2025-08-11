@@ -152,7 +152,9 @@ public class ManualPageService {
             processAutomationReadiness(testCase);
         }
 
-        JiraTestCase savedTestCase = jiraTestCaseRepository.save(testCase);
+        // Use saveAndFlush to ensure immediate persistence
+        JiraTestCase savedTestCase = jiraTestCaseRepository.saveAndFlush(testCase);
+        logger.info("Successfully saved automation flags for test case {}", testCaseId);
         return convertTestCaseToDto(savedTestCase);
     }
 

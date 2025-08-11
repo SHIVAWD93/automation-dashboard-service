@@ -41,6 +41,9 @@ public class JiraIntegrationService {
     @Autowired
     private ObjectMapper objectMapper;
 
+    @Autowired
+    private QTestService qTestService;
+
     // Pattern to extract QTest test case links from Jira issues
     private static final Pattern QTEST_PATTERN = Pattern.compile(
             "(?i)(?:qtest|test\\s*case)\\s*:?\\s*([\\w\\s\\-_.,()\\[\\]]+)",
@@ -185,6 +188,13 @@ public class JiraIntegrationService {
      * NEW: Global keyword search across all issues in a project
      */
     public Map<String, Object> searchKeywordGlobally(String keyword, String jiraProjectKey) {
+        return searchKeywordGlobally(keyword, jiraProjectKey, null);
+    }
+
+    /**
+     * NEW: Global keyword search across all issues in a project with optional sprint filter
+     */
+    public Map<String, Object> searchKeywordGlobally(String keyword, String jiraProjectKey, String sprintId) {
         if (!jiraConfig.isConfigured() || keyword == null || keyword.trim().isEmpty()) {
             return createEmptySearchResult(keyword);
         }
@@ -195,9 +205,17 @@ public class JiraIntegrationService {
                     ? jiraProjectKey
                     : jiraConfig.getJiraProjectKey();
 
-            // Search in issue summaries, descriptions, and comments
-            String jql = String.format("project = %s AND (summary ~ \"%s\" OR description ~ \"%s\" OR comment ~ \"%s\")",
-                    projectKey, keyword, keyword, keyword);
+            // Build JQL query with optional sprint filter
+            String jql;
+            if (sprintId != null && !sprintId.trim().isEmpty()) {
+                // Search in specific sprint
+                jql = String.format("project = %s AND sprint = %s AND (summary ~ \"%s\" OR description ~ \"%s\" OR comment ~ \"%s\")",
+                        projectKey, sprintId, keyword, keyword, keyword);
+            } else {
+                // Search in entire project
+                jql = String.format("project = %s AND (summary ~ \"%s\" OR description ~ \"%s\" OR comment ~ \"%s\")",
+                        projectKey, keyword, keyword, keyword);
+            }
 
             String url = UriComponentsBuilder.fromPath("/rest/api/2/search")
                     .queryParam("jql", jql)
@@ -206,7 +224,8 @@ public class JiraIntegrationService {
                     .build()
                     .toUriString();
 
-            logger.info("Performing global keyword search for '{}' in project: {}", keyword, projectKey);
+            logger.info("Performing global keyword search for '{}' in project: {} sprint: {}", 
+                    keyword, projectKey, sprintId != null ? sprintId : "ALL");
 
             String response = jiraWebClient.get()
                     .uri(url)
@@ -418,8 +437,14 @@ public class JiraIntegrationService {
                 issueDto.setSprintName(sprintName);
             }
 
-            // Extract linked test cases from description and comments
-            List<JiraTestCaseDto> linkedTestCases = extractLinkedTestCases(issueDto.getDescription());
+            // Enhanced: Fetch linked test cases from QTest instead of extracting from text patterns
+            List<JiraTestCaseDto> linkedTestCases = fetchLinkedTestCasesFromQTest(key);
+            
+            // Fallback: If no QTest integration or no linked test cases found, use text extraction
+            if (linkedTestCases.isEmpty()) {
+                linkedTestCases = extractLinkedTestCases(issueDto.getDescription());
+            }
+            
             issueDto.setLinkedTestCases(linkedTestCases);
 
             return issueDto;
@@ -428,6 +453,53 @@ public class JiraIntegrationService {
             logger.error("Error parsing issue node: {}", e.getMessage(), e);
             return null;
         }
+    }
+
+    /**
+     * Enhanced: Fetch linked test cases from QTest for a JIRA issue
+     */
+    private List<JiraTestCaseDto> fetchLinkedTestCasesFromQTest(String jiraIssueKey) {
+        List<JiraTestCaseDto> testCases = new ArrayList<>();
+        
+        try {
+            // Check if QTest integration is available
+            if (!jiraConfig.isQTestConfigured()) {
+                logger.debug("QTest not configured, skipping QTest integration for issue: {}", jiraIssueKey);
+                return testCases;
+            }
+            
+            // Search for test cases linked to this JIRA issue
+            List<Map<String, Object>> qtestLinkedCases = qTestService.searchTestCasesLinkedToJira(jiraIssueKey);
+            
+            for (Map<String, Object> qtestCase : qtestLinkedCases) {
+                String testCaseId = (String) qtestCase.get("id");
+                String testCaseName = (String) qtestCase.get("name");
+                
+                if (testCaseId != null && testCaseName != null) {
+                    JiraTestCaseDto testCaseDto = new JiraTestCaseDto(testCaseName);
+                    testCaseDto.setQtestId(testCaseId);
+                    
+                    // Set additional QTest properties if available
+                    if (qtestCase.get("assignee") != null) {
+                        testCaseDto.setQtestAssignee((String) qtestCase.get("assignee"));
+                    }
+                    if (qtestCase.get("assigneeDisplayName") != null) {
+                        testCaseDto.setQtestAssigneeDisplayName((String) qtestCase.get("assigneeDisplayName"));
+                    }
+                    
+                    testCases.add(testCaseDto);
+                }
+            }
+            
+            logger.info("Fetched {} linked test cases from QTest for JIRA issue: {}", 
+                    testCases.size(), jiraIssueKey);
+            
+        } catch (Exception e) {
+            logger.warn("Failed to fetch linked test cases from QTest for issue {}: {}", 
+                    jiraIssueKey, e.getMessage());
+        }
+        
+        return testCases;
     }
 
     /**
