@@ -2,7 +2,11 @@ package com.qa.automation.controller;
 
 import com.qa.automation.model.JenkinsResult;
 import com.qa.automation.model.JenkinsTestCase;
+import com.qa.automation.model.Tester;
+import com.qa.automation.model.Project;
 import com.qa.automation.repository.JenkinsResultRepository;
+import com.qa.automation.repository.TesterRepository;
+import com.qa.automation.repository.ProjectRepository;
 import com.qa.automation.service.JenkinsService;
 import com.qa.automation.service.JenkinsTestNGService;
 import com.qa.automation.service.TestNGXMLParserService;
@@ -12,6 +16,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.*;
+import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/api/jenkins")
@@ -29,6 +34,12 @@ public class JenkinsController {
 
     @Autowired
     private JenkinsResultRepository jenkinsResultRepository;
+
+    @Autowired
+    private TesterRepository testerRepository;
+
+    @Autowired
+    private ProjectRepository projectRepository;
 
     @GetMapping("/test-connection")
     public ResponseEntity<Map<String, Object>> testJenkinsConnection() {
@@ -50,7 +61,114 @@ public class JenkinsController {
     public ResponseEntity<List<JenkinsResult>> getAllLatestResults() {
         try {
             List<JenkinsResult> results = jenkinsService.getAllLatestResults();
+            // Calculate and set pass percentage for each result
+            for (JenkinsResult result : results) {
+                calculateAndSetPassPercentage(result);
+            }
             return ResponseEntity.ok(results);
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        }
+    }
+    // NEW: Enhanced results endpoint with filtering
+    @GetMapping("/results/filtered")
+    public ResponseEntity<List<JenkinsResult>> getFilteredResults(
+            @RequestParam(required = false) Long projectId,
+            @RequestParam(required = false) Long automationTesterId,
+            @RequestParam(required = false) String jobFrequency,
+            @RequestParam(required = false) String buildStatus) {
+        try {
+            List<JenkinsResult> results = jenkinsService.getAllLatestResults();
+
+            // Apply filters
+            List<JenkinsResult> filteredResults = results.stream()
+                    .filter(result -> {
+                        // Project filter
+                        if (projectId != null && (result.getProject() == null || !result.getProject().getId().equals(projectId))) {
+                            return false;
+                        }
+                        // Automation tester filter
+                        if (automationTesterId != null && (result.getAutomationTester() == null || !result.getAutomationTester().getId().equals(automationTesterId))) {
+                            return false;
+                        }
+                        // Job frequency filter
+                        if (jobFrequency != null && !jobFrequency.isEmpty() && !jobFrequency.equalsIgnoreCase(result.getJobFrequency())) {
+                            return false;
+                        }
+                        // Build status filter
+                        if (buildStatus != null && !buildStatus.isEmpty() && !buildStatus.equalsIgnoreCase(result.getBuildStatus())) {
+                            return false;
+                        }
+                        return true;
+                    })
+                    .collect(Collectors.toList());
+
+            // Calculate and set pass percentage for each result
+            for (JenkinsResult result : filteredResults) {
+                calculateAndSetPassPercentage(result);
+                // Ensure job frequency is set
+                if (result.getJobFrequency() == null || result.getJobFrequency().isEmpty()) {
+                    result.inferJobFrequency();
+                }
+            }
+
+            return ResponseEntity.ok(filteredResults);
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        }
+    }
+
+    // NEW: Get unique job frequencies for filter dropdown
+    @GetMapping("/frequencies")
+    public ResponseEntity<List<String>> getJobFrequencies() {
+        try {
+            List<String> frequencies = jenkinsResultRepository.findAll().stream()
+                    .map(result -> {
+                        if (result.getJobFrequency() == null || result.getJobFrequency().isEmpty()) {
+                            result.inferJobFrequency();
+                            return result.getJobFrequency();
+                        }
+                        return result.getJobFrequency();
+                    })
+                    .distinct()
+                    .sorted()
+                    .collect(Collectors.toList());
+
+            return ResponseEntity.ok(frequencies);
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        }
+    }
+
+    // NEW: Get projects that have Jenkins results for filter dropdown
+    @GetMapping("/projects")
+    public ResponseEntity<List<Project>> getProjectsWithJenkinsResults() {
+        try {
+            List<Project> projects = jenkinsResultRepository.findAll().stream()
+                    .filter(result -> result.getProject() != null)
+                    .map(JenkinsResult::getProject)
+                    .distinct()
+                    .sorted((p1, p2) -> p1.getName().compareToIgnoreCase(p2.getName()))
+                    .collect(Collectors.toList());
+
+            return ResponseEntity.ok(projects);
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        }
+    }
+
+    // NEW: Get automation testers that have Jenkins results for filter dropdown
+    @GetMapping("/automation-testers")
+    public ResponseEntity<List<Tester>> getAutomationTestersWithJenkinsResults() {
+        try {
+            List<Tester> testers = jenkinsResultRepository.findAll().stream()
+                    .filter(result -> result.getAutomationTester() != null)
+                    .map(JenkinsResult::getAutomationTester)
+                    .distinct()
+                    .sorted((t1, t2) -> t1.getName().compareToIgnoreCase(t2.getName()))
+                    .collect(Collectors.toList());
+
+            return ResponseEntity.ok(testers);
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
         }
@@ -61,6 +179,7 @@ public class JenkinsController {
         try {
             JenkinsResult result = jenkinsService.getLatestResultByJobName(jobName);
             if (result != null) {
+                calculateAndSetPassPercentage(result);
                 return ResponseEntity.ok(result);
             }
             return ResponseEntity.notFound().build();
@@ -164,234 +283,16 @@ public class JenkinsController {
         }
     }
 
-    // Manual test case extraction endpoint
-    @PostMapping("/extract-testcases/{jobName}/{buildNumber}")
-    public ResponseEntity<Map<String, Object>> extractTestCasesForBuild(
-            @PathVariable String jobName,
-            @PathVariable String buildNumber) {
-        try {
-            // Force sync the specific job to extract test cases
-            jenkinsService.syncJobResultFromJenkins(jobName);
-
-            // Get the detailed test cases
-            Map<String, Object> testCases = jenkinsTestNGService.getDetailedTestCases(jobName, buildNumber);
-
-            Map<String, Object> response = new HashMap<>();
-            response.put("message", "Test cases extracted successfully for " + jobName + " build " + buildNumber);
-            response.put("result", testCases);
-            return ResponseEntity.ok(response);
-        } catch (Exception e) {
-            Map<String, Object> response = new HashMap<>();
-            response.put("error", "Failed to extract test cases: " + e.getMessage());
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
-        }
-    }
-
-    // Debug endpoints
-    @GetMapping("/debug/testng/{jobName}/{buildNumber}")
-    public ResponseEntity<Map<String, Object>> debugTestNGApi(
-            @PathVariable String jobName,
-            @PathVariable String buildNumber) {
-        try {
-            Map<String, Object> debugInfo = new HashMap<>();
-
-            // Test TestNG API endpoint
-            String testngUrl = "https://jenkinsautoqa.winwholesale.com/jenkins/job/" + jobName + "/" + buildNumber + "/testngreports/api/json";
-            debugInfo.put("testngUrl", testngUrl);
-
-            // Test standard test report API endpoint
-            String standardUrl = "https://jenkinsautoqa.winwholesale.com/jenkins/job/" + jobName + "/" + buildNumber + "/testReport/api/json";
-            debugInfo.put("standardUrl", standardUrl);
-
-            // Try to fetch detailed test cases
-            Map<String, Object> testCases = jenkinsTestNGService.getDetailedTestCases(jobName, buildNumber);
-            debugInfo.put("testCasesResult", testCases);
-
-            return ResponseEntity.ok(debugInfo);
-        } catch (Exception e) {
-            Map<String, Object> response = new HashMap<>();
-            response.put("error", "Debug failed: " + e.getMessage());
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
-        }
-    }
-
-    // Simple test endpoint to verify the fix
-    @GetMapping("/test-fix/{jobName}/{buildNumber}")
-    public ResponseEntity<Map<String, Object>> testFix(
-            @PathVariable String jobName,
-            @PathVariable String buildNumber) {
-        try {
-            Map<String, Object> result = new HashMap<>();
-
-            // Test the enhanced getDetailedTestCases method
-            Map<String, Object> testCases = jenkinsTestNGService.getDetailedTestCases(jobName, buildNumber);
-
-            result.put("success", true);
-            result.put("testCaseCount", testCases.get("totalCount"));
-            result.put("passedCount", testCases.get("passedCount"));
-            result.put("failedCount", testCases.get("failedCount"));
-            result.put("skippedCount", testCases.get("skippedCount"));
-
-            if (testCases.containsKey("testCases")) {
-                @SuppressWarnings("unchecked")
-                List<Map<String, Object>> cases = (List<Map<String, Object>>) testCases.get("testCases");
-                if (!cases.isEmpty()) {
-                    result.put("sampleTestCase", cases.get(0));
-                }
-            }
-
-            return ResponseEntity.ok(result);
-        } catch (Exception e) {
-            Map<String, Object> response = new HashMap<>();
-            response.put("success", false);
-            response.put("error", "Test failed: " + e.getMessage());
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
-        }
-    }
-
-    // Test XML parsing specifically
-    @GetMapping("/test-xml-parsing/{jobName}/{buildNumber}")
-    public ResponseEntity<Map<String, Object>> testXMLParsing(
-            @PathVariable String jobName,
-            @PathVariable String buildNumber) {
-        try {
-            Map<String, Object> result = new HashMap<>();
-
-            // Get the Jenkins result from database
-            Optional<JenkinsResult> jenkinsResult = jenkinsResultRepository
-                    .findByJobNameAndBuildNumber(jobName, buildNumber);
-
-            if (jenkinsResult.isPresent()) {
-                // Test XML parsing directly
-                List<JenkinsTestCase> testCases = testNGXMLParserService.extractTestCasesFromXMLFiles(jenkinsResult.get());
-
-                result.put("success", true);
-                result.put("xmlTestCaseCount", testCases.size());
-                result.put("jobName", jobName);
-                result.put("buildNumber", buildNumber);
-
-                if (!testCases.isEmpty()) {
-                    // Show sample test cases
-                    List<Map<String, Object>> samples = new ArrayList<>();
-                    for (int i = 0; i < Math.min(5, testCases.size()); i++) {
-                        JenkinsTestCase tc = testCases.get(i);
-                        Map<String, Object> sample = new HashMap<>();
-                        sample.put("className", tc.getClassName());
-                        sample.put("testName", tc.getTestName());
-                        sample.put("status", tc.getStatus());
-                        sample.put("duration", tc.getDuration());
-                        samples.add(sample);
-                    }
-                    result.put("sampleTestCases", samples);
-
-                    // Count by status
-                    long passed = testCases.stream().filter(tc -> "PASSED".equals(tc.getStatus())).count();
-                    long failed = testCases.stream().filter(tc -> "FAILED".equals(tc.getStatus())).count();
-                    long skipped = testCases.stream().filter(tc -> "SKIPPED".equals(tc.getStatus())).count();
-
-                    result.put("passedCount", passed);
-                    result.put("failedCount", failed);
-                    result.put("skippedCount", skipped);
-                } else {
-                    result.put("message", "No test cases found in XML files");
-                }
-            } else {
-                result.put("success", false);
-                result.put("error", "Jenkins result not found in database");
-            }
-
-            return ResponseEntity.ok(result);
-        } catch (Exception e) {
-            Map<String, Object> response = new HashMap<>();
-            response.put("success", false);
-            response.put("error", "XML parsing test failed: " + e.getMessage());
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
-        }
-    }
-
-//    // Get all test cases for a specific build with filtering options
-//    @GetMapping("/testng/{jobName}/{buildNumber}/testcases/detailed")
-//    public ResponseEntity<Map<String, Object>> getDetailedTestCasesWithFilters(
-//            @PathVariable String jobName,
-//            @PathVariable String buildNumber,
-//            @RequestParam(required = false) String status,
-//            @RequestParam(required = false) String className,
-//            @RequestParam(defaultValue = "0") int page,
-//            @RequestParam(defaultValue = "50") int size) {
-//        try {
-//            Map<String, Object> testCases = jenkinsTestNGService.getDetailedTestCasesWithFilters(
-//                    jobName, buildNumber, status, className, page, size);
-//            return ResponseEntity.ok(testCases);
-//        } catch (Exception e) {
-//            Map<String, Object> response = new HashMap<>();
-//            response.put("error", "Failed to get filtered test cases: " + e.getMessage());
-//            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
-//        }
-//    }
-//
-//    // Get test execution trends for a job
-//    @GetMapping("/testng/{jobName}/trends")
-//    public ResponseEntity<Map<String, Object>> getTestExecutionTrends(
-//            @PathVariable String jobName,
-//            @RequestParam(defaultValue = "10") int builds) {
-//        try {
-//            Map<String, Object> trends = jenkinsTestNGService.getTestExecutionTrends(jobName, builds);
-//            return ResponseEntity.ok(trends);
-//        } catch (Exception e) {
-//            Map<String, Object> response = new HashMap<>();
-//            response.put("error", "Failed to get test execution trends: " + e.getMessage());
-//            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
-//        }
-//    }
-//
-//    // Get failed test cases with error details
-//    @GetMapping("/testng/{jobName}/{buildNumber}/failed-tests")
-//    public ResponseEntity<Map<String, Object>> getFailedTestsWithDetails(
-//            @PathVariable String jobName,
-//            @PathVariable String buildNumber) {
-//        try {
-//            Map<String, Object> failedTests = jenkinsTestNGService.getFailedTestsWithDetails(jobName, buildNumber);
-//            return ResponseEntity.ok(failedTests);
-//        } catch (Exception e) {
-//            Map<String, Object> response = new HashMap<>();
-//            response.put("error", "Failed to get failed test details: " + e.getMessage());
-//            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
-//        }
-//    }
-
-//    // Refresh test data for a specific build
-//    @PostMapping("/testng/{jobName}/{buildNumber}/refresh")
-//    public ResponseEntity<Map<String, Object>> refreshTestDataForBuild(
-//            @PathVariable String jobName,
-//            @PathVariable String buildNumber) {
-//        try {
-//            // Force refresh of test data
-//            jenkinsTestNGService.refreshTestDataForBuild(jobName, buildNumber);
-//
-//            // Get updated test cases
-//            Map<String, Object> testCases = jenkinsTestNGService.getDetailedTestCases(jobName, buildNumber);
-//
-//            Map<String, Object> response = new HashMap<>();
-//            response.put("message", "Test data refreshed successfully");
-//            response.put("result", testCases);
-//            return ResponseEntity.ok(response);
-//        } catch (Exception e) {
-//            Map<String, Object> response = new HashMap<>();
-//            response.put("error", "Failed to refresh test data: " + e.getMessage());
-//            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
-//        }
-//    }
-
     /**
-     * Update notes for a Jenkins result
+     * FIXED: Enhanced notes update endpoint
      */
     @PutMapping("/results/{id}/notes")
     public ResponseEntity<Map<String, Object>> updateJenkinsResultNotes(
             @PathVariable Long id,
-            @RequestBody NotesUpdateRequest request) {
+            @RequestBody Map<String, Object> requestBody) {
         try {
-            String notes = request.getNotes();
-            
+            System.out.println("Received request body: " + requestBody);
+
             Optional<JenkinsResult> optionalResult = jenkinsResultRepository.findById(id);
             if (optionalResult.isEmpty()) {
                 Map<String, Object> response = new HashMap<>();
@@ -399,25 +300,209 @@ public class JenkinsController {
                 response.put("message", "Jenkins result not found with id: " + id);
                 return ResponseEntity.notFound().build();
             }
-            
+
             JenkinsResult result = optionalResult.get();
-            result.setNotes(notes);
+
+            // Handle different possible request formats
+            String notes = null;
+            if (requestBody.containsKey("bugsIdentified")) {
+                notes = (String) requestBody.get("bugsIdentified");
+            } else if (requestBody.containsKey("failureReasons")) {
+                notes = (String) requestBody.get("failureReasons");
+            } else if (requestBody.containsKey("notes")) {
+                notes = (String) requestBody.get("notes");
+            }
+
+            // Set the notes (allow empty string, but convert null to empty)
+            result.setBugsIdentified(notes != null ? notes : "");
+            result.setFailureReasons(notes != null ? notes : "");
+
             jenkinsResultRepository.save(result);
-            
+
             Map<String, Object> response = new HashMap<>();
             response.put("success", true);
             response.put("message", "Notes updated successfully");
             response.put("id", id);
             response.put("notes", notes);
             response.put("timestamp", new Date());
-            
+
             return ResponseEntity.ok(response);
-            
+
         } catch (Exception e) {
+            System.err.println("Error updating notes: " + e.getMessage());
+            e.printStackTrace();
             Map<String, Object> response = new HashMap<>();
             response.put("success", false);
             response.put("message", "Failed to update notes: " + e.getMessage());
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
+        }
+    }
+
+    /**
+     * FIXED: Endpoint for assigning testers to Jenkins results
+     */
+    @PostMapping("/results/{id}/testers")
+    public ResponseEntity<Map<String, Object>> assignTestersToJenkinsResult(
+            @PathVariable Long id,
+            @RequestBody TesterAssignmentRequest request) {
+        try {
+            System.out.println("Assigning testers to Jenkins result: " + id);
+            System.out.println("Request: " + request);
+
+            Optional<JenkinsResult> optionalResult = jenkinsResultRepository.findById(id);
+            if (optionalResult.isEmpty()) {
+                Map<String, Object> response = new HashMap<>();
+                response.put("success", false);
+                response.put("message", "Jenkins result not found with id: " + id);
+                return ResponseEntity.notFound().build();
+            }
+
+            JenkinsResult result = optionalResult.get();
+
+            // Assign automation tester
+            if (request.getAutomationTesterId() != null) {
+                Optional<Tester> automationTester = testerRepository.findById(request.getAutomationTesterId());
+                if (automationTester.isPresent()) {
+                    result.setAutomationTester(automationTester.get());
+                    System.out.println("Assigned automation tester: " + automationTester.get().getName());
+                }
+            }
+
+            // Assign manual tester
+            if (request.getManualTesterId() != null) {
+                Optional<Tester> manualTester = testerRepository.findById(request.getManualTesterId());
+                if (manualTester.isPresent()) {
+                    result.setManualTester(manualTester.get());
+                    System.out.println("Assigned manual tester: " + manualTester.get().getName());
+                }
+            }
+
+            // Calculate and set pass percentage
+            calculateAndSetPassPercentage(result);
+
+            jenkinsResultRepository.save(result);
+
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", true);
+            response.put("message", "Testers assigned successfully");
+            response.put("id", id);
+            response.put("automationTester", result.getAutomationTester() != null ?
+                    result.getAutomationTester().getName() : null);
+            response.put("manualTester", result.getManualTester() != null ?
+                    result.getManualTester().getName() : null);
+            response.put("passPercentage", result.getPassPercentage());
+            response.put("timestamp", new Date());
+
+            return ResponseEntity.ok(response);
+
+        } catch (Exception e) {
+            System.err.println("Error assigning testers: " + e.getMessage());
+            e.printStackTrace();
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", false);
+            response.put("message", "Failed to assign testers: " + e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
+        }
+    }
+
+    /**
+     * FIXED: Main endpoint to save all data (notes, testers, and project) in one request
+     */
+    @PostMapping("/results/{id}/save-all")
+    public ResponseEntity<Map<String, Object>> saveAllData(
+            @PathVariable Long id,
+            @RequestBody CombinedSaveRequest request) {
+        try {
+            System.out.println("Saving combined data for Jenkins result: " + id);
+            System.out.println("Request: " + request);
+
+            Optional<JenkinsResult> optionalResult = jenkinsResultRepository.findById(id);
+            if (optionalResult.isEmpty()) {
+                Map<String, Object> response = new HashMap<>();
+                response.put("success", false);
+                response.put("message", "Jenkins result not found with id: " + id);
+                return ResponseEntity.notFound().build();
+            }
+
+            JenkinsResult result = optionalResult.get();
+
+            // Update notes if provided
+            if (request.getNotes() != null) {
+                String notes = request.getNotes().trim();
+                result.setBugsIdentified(notes);
+                result.setFailureReasons(notes);
+            }
+
+            // Update testers if provided
+            if (request.getAutomationTesterId() != null) {
+                Optional<Tester> automationTester = testerRepository.findById(request.getAutomationTesterId());
+                if (automationTester.isPresent()) {
+                    result.setAutomationTester(automationTester.get());
+                } else {
+                    result.setAutomationTester(null);
+                }
+            }
+
+            if (request.getManualTesterId() != null) {
+                Optional<Tester> manualTester = testerRepository.findById(request.getManualTesterId());
+                if (manualTester.isPresent()) {
+                    result.setManualTester(manualTester.get());
+                } else {
+                    result.setManualTester(null);
+                }
+            }
+
+            // NEW: Update project if provided
+            if (request.getProjectId() != null) {
+                Optional<Project> project = projectRepository.findById(request.getProjectId());
+                if (project.isPresent()) {
+                    result.setProject(project.get());
+                } else {
+                    result.setProject(null);
+                }
+            }
+
+            // Calculate and set pass percentage
+            calculateAndSetPassPercentage(result);
+
+            jenkinsResultRepository.save(result);
+
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", true);
+            response.put("message", "Data saved successfully");
+            response.put("id", id);
+            response.put("notes", result.getBugsIdentified());
+            response.put("automationTester", result.getAutomationTester() != null ?
+                    result.getAutomationTester().getName() : null);
+            response.put("manualTester", result.getManualTester() != null ?
+                    result.getManualTester().getName() : null);
+            response.put("project", result.getProject() != null ?
+                    result.getProject().getName() : null);
+            response.put("passPercentage", result.getPassPercentage());
+            response.put("timestamp", new Date());
+
+            return ResponseEntity.ok(response);
+
+        } catch (Exception e) {
+            System.err.println("Error saving combined data: " + e.getMessage());
+            e.printStackTrace();
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", false);
+            response.put("message", "Failed to save data: " + e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
+        }
+    }
+
+    /**
+     * Helper method to calculate and set pass percentage
+     */
+    private void calculateAndSetPassPercentage(JenkinsResult result) {
+        if (result.getTotalTests() != null && result.getTotalTests() > 0) {
+            int passedTests = result.getPassedTests() != null ? result.getPassedTests() : 0;
+            double percentage = ((double) passedTests / result.getTotalTests()) * 100;
+            result.setPassPercentage((int) Math.round(percentage));
+        } else {
+            result.setPassPercentage(0);
         }
     }
 
@@ -434,19 +519,21 @@ public class JenkinsController {
                 response.put("message", "Jenkins result not found with id: " + id);
                 return ResponseEntity.notFound().build();
             }
-            
+
             JenkinsResult result = optionalResult.get();
-            
+
             Map<String, Object> response = new HashMap<>();
             response.put("success", true);
             response.put("id", id);
-            response.put("notes", result.getNotes());
+            response.put("notes", result.getBugsIdentified());
+            response.put("bugsIdentified", result.getBugsIdentified());
+            response.put("failureReasons", result.getFailureReasons());
             response.put("jobName", result.getJobName());
             response.put("buildNumber", result.getBuildNumber());
             response.put("timestamp", new Date());
-            
+
             return ResponseEntity.ok(response);
-            
+
         } catch (Exception e) {
             Map<String, Object> response = new HashMap<>();
             response.put("success", false);
@@ -466,8 +553,92 @@ public class JenkinsController {
     }
 
     // Request DTOs
+    public static class TesterAssignmentRequest {
+        private Long automationTesterId;
+        private Long manualTesterId;
+
+        public TesterAssignmentRequest() {}
+
+        public Long getAutomationTesterId() {
+            return automationTesterId;
+        }
+
+        public void setAutomationTesterId(Long automationTesterId) {
+            this.automationTesterId = automationTesterId;
+        }
+
+        public Long getManualTesterId() {
+            return manualTesterId;
+        }
+
+        public void setManualTesterId(Long manualTesterId) {
+            this.manualTesterId = manualTesterId;
+        }
+
+        @Override
+        public String toString() {
+            return "TesterAssignmentRequest{" +
+                    "automationTesterId=" + automationTesterId +
+                    ", manualTesterId=" + manualTesterId +
+                    '}';
+        }
+    }
+
+    public static class CombinedSaveRequest {
+        private String notes;
+        private Long automationTesterId;
+        private Long manualTesterId;
+        private Long projectId; // NEW: Added project support
+
+        public CombinedSaveRequest() {}
+
+        public String getNotes() {
+            return notes;
+        }
+
+        public void setNotes(String notes) {
+            this.notes = notes;
+        }
+
+        public Long getAutomationTesterId() {
+            return automationTesterId;
+        }
+
+        public void setAutomationTesterId(Long automationTesterId) {
+            this.automationTesterId = automationTesterId;
+        }
+
+        public Long getManualTesterId() {
+            return manualTesterId;
+        }
+
+        public void setManualTesterId(Long manualTesterId) {
+            this.manualTesterId = manualTesterId;
+        }
+
+        public Long getProjectId() {
+            return projectId;
+        }
+
+        public void setProjectId(Long projectId) {
+            this.projectId = projectId;
+        }
+
+        @Override
+        public String toString() {
+            return "CombinedSaveRequest{" +
+                    "notes='" + notes + '\'' +
+                    ", automationTesterId=" + automationTesterId +
+                    ", manualTesterId=" + manualTesterId +
+                    ", projectId=" + projectId +
+                    '}';
+        }
+    }
+
     public static class NotesUpdateRequest {
         private String notes;
+        private String bugsIdentified;
+        private String failureReasons;
 
         public NotesUpdateRequest() {}
 
@@ -477,6 +648,22 @@ public class JenkinsController {
 
         public void setNotes(String notes) {
             this.notes = notes;
+        }
+
+        public String getBugsIdentified() {
+            return bugsIdentified;
+        }
+
+        public void setBugsIdentified(String bugsIdentified) {
+            this.bugsIdentified = bugsIdentified;
+        }
+
+        public String getFailureReasons() {
+            return failureReasons;
+        }
+
+        public void setFailureReasons(String failureReasons) {
+            this.failureReasons = failureReasons;
         }
     }
 }

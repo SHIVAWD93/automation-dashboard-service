@@ -82,7 +82,6 @@ public class DataInitializationService {
                     logger.info("Creating default tester");
                     Tester tester = new Tester();
                     tester.setName("Unassigned");
-                    tester.setEmail("unassigned@company.com");
                     tester.setCreatedAt(LocalDateTime.now());
                     tester.setUpdatedAt(LocalDateTime.now());
                     return testerRepository.save(tester);

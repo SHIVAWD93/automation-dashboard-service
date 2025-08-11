@@ -1,5 +1,6 @@
 package com.qa.automation.service;
 
+import com.qa.automation.config.JiraConfig;
 import com.qa.automation.dto.JiraIssueDto;
 import com.qa.automation.dto.JiraTestCaseDto;
 import com.qa.automation.model.*;
@@ -24,6 +25,9 @@ public class ManualPageService {
 
     @Autowired
     private TestCaseService testCaseService;
+
+    @Autowired
+    JiraConfig jiraConfig;
 
     @Autowired
     private JiraIssueRepository jiraIssueRepository;

@@ -23,12 +23,12 @@ public class AutomationCoverageApplication {
     CommandLineRunner initDatabase(PermissionRepository repository, UserRepository userRepository, DataInitializationService dataInitService) {
         return args -> {
             // Initialize permissions and users first
-            repository.save(new UserPermission( 1L,"read", LocalDateTime.now(),LocalDateTime.now()));
-            repository.save(new UserPermission( 2L,"write", LocalDateTime.now(),LocalDateTime.now()));
-            userRepository.save(new User("admin","admin","admin",repository.findById(2L).get()));
+//            repository.save(new UserPermission( 1L,"read", LocalDateTime.now(),LocalDateTime.now()));
+//            repository.save(new UserPermission( 2L,"write", LocalDateTime.now(),LocalDateTime.now()));
+//            userRepository.save(new User("admin","admin","admin",repository.findById(2L).get()));
             
             // Initialize basic data to prevent constraint violations
-            dataInitService.initializeBasicData();
+        //    dataInitService.initializeBasicData();
             
             System.out.println("Database initialization completed");
         };
