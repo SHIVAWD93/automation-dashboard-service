@@ -174,7 +174,7 @@ public class JiraTestCaseDto {
     private void updateAutomationStatus() {
         if (canBeAutomated != null && cannotBeAutomated != null) {
             if (canBeAutomated && !cannotBeAutomated) {
-                this.automationStatus = "READY_TO_AUTOMATE";
+                this.automationStatus = "Ready to Automate";
             } else if (!canBeAutomated && cannotBeAutomated) {
                 this.automationStatus = "NOT_AUTOMATABLE";
             } else {
@@ -184,7 +184,7 @@ public class JiraTestCaseDto {
     }
 
     public boolean isReadyToAutomate() {
-        return "READY_TO_AUTOMATE".equals(automationStatus);
+        return "Ready to Automate".equals(automationStatus);
     }
 
     public boolean isNotAutomatable() {

@@ -169,7 +169,7 @@ public class JiraIssueDto {
 
     public int getAutomationReadyCount() {
         return (int) linkedTestCases.stream()
-                .filter(tc -> "READY_TO_AUTOMATE".equals(tc.getAutomationStatus()))
+                .filter(tc -> "Ready to Automate".equals(tc.getAutomationStatus()))
                 .count();
     }
 

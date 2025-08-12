@@ -30,7 +30,7 @@ public interface JiraTestCaseRepository extends JpaRepository<JiraTestCase, Long
     List<JiraTestCase> findByAutomationStatus(String automationStatus);
 
     // Find ready to automate test cases
-    @Query("SELECT jtc FROM JiraTestCase jtc WHERE jtc.automationStatus = 'READY_TO_AUTOMATE'")
+    @Query("SELECT jtc FROM JiraTestCase jtc WHERE jtc.automationStatus = 'Ready to Automate'")
     List<JiraTestCase> findReadyToAutomate();
 
     // Find not automatable test cases
@@ -62,7 +62,7 @@ public interface JiraTestCaseRepository extends JpaRepository<JiraTestCase, Long
     Long countByAutomationStatus(@Param("status") String status);
 
     // Count ready to automate by project
-    @Query("SELECT COUNT(jtc) FROM JiraTestCase jtc WHERE jtc.automationStatus = 'READY_TO_AUTOMATE' AND jtc.project.id = :projectId")
+    @Query("SELECT COUNT(jtc) FROM JiraTestCase jtc WHERE jtc.automationStatus = 'Ready to Automate' AND jtc.project.id = :projectId")
     Long countReadyToAutomateByProject(@Param("projectId") Long projectId);
 
     // Find by sprint ID through Jira issue
@@ -78,7 +78,7 @@ public interface JiraTestCaseRepository extends JpaRepository<JiraTestCase, Long
 
     // Get automation statistics
     @Query("SELECT " +
-           "SUM(CASE WHEN jtc.automationStatus = 'READY_TO_AUTOMATE' THEN 1 ELSE 0 END) as readyCount, " +
+           "SUM(CASE WHEN jtc.automationStatus = 'Ready to Automate' THEN 1 ELSE 0 END) as readyCount, " +
            "SUM(CASE WHEN jtc.automationStatus = 'NOT_AUTOMATABLE' THEN 1 ELSE 0 END) as notAutomatableCount, " +
            "SUM(CASE WHEN jtc.automationStatus = 'PENDING' THEN 1 ELSE 0 END) as pendingCount, " +
            "COUNT(jtc) as totalCount " +
@@ -88,7 +88,7 @@ public interface JiraTestCaseRepository extends JpaRepository<JiraTestCase, Long
     // Get automation statistics by project
     @Query("SELECT " +
            "p.name as projectName, " +
-           "SUM(CASE WHEN jtc.automationStatus = 'READY_TO_AUTOMATE' THEN 1 ELSE 0 END) as readyCount, " +
+           "SUM(CASE WHEN jtc.automationStatus = 'Ready to Automate' THEN 1 ELSE 0 END) as readyCount, " +
            "SUM(CASE WHEN jtc.automationStatus = 'NOT_AUTOMATABLE' THEN 1 ELSE 0 END) as notAutomatableCount, " +
            "SUM(CASE WHEN jtc.automationStatus = 'PENDING' THEN 1 ELSE 0 END) as pendingCount, " +
            "COUNT(jtc) as totalCount " +

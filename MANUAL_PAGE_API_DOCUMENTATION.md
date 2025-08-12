@@ -150,7 +150,7 @@ Mark test cases as automatable or non-automatable.
   "qtestTitle": "Test login with valid credentials",
   "canBeAutomated": true,
   "cannotBeAutomated": false,
-  "automationStatus": "READY_TO_AUTOMATE",
+  "automationStatus": "Ready to Automate",
   "projectId": 1,
   "projectName": "Web Application",
   "assignedTesterId": 1,
@@ -225,12 +225,12 @@ Get automation readiness statistics for a sprint.
   "pending": 10,
   "projectBreakdown": {
     "Web Application": {
-      "READY_TO_AUTOMATE": 6,
+      "Ready to Automate": 6,
       "NOT_AUTOMATABLE": 2,
       "PENDING": 4
     },
     "Mobile App": {
-      "READY_TO_AUTOMATE": 4,
+      "Ready to Automate": 4,
       "NOT_AUTOMATABLE": 3,
       "PENDING": 6
     }

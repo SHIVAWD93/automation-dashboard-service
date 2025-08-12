@@ -597,7 +597,7 @@ public class ManualPageService {
         if (!existingTestCases.isEmpty()) {
             // Update existing test case
             testCase = existingTestCases.get(0);
-            testCase.setStatus("READY_TO_AUTOMATE");
+            testCase.setStatus("Ready to Automate");
         } else {
             // Create new test case
             testCase = new TestCase();
@@ -611,7 +611,7 @@ public class ManualPageService {
                 ? jiraTestCase.getQtestPriority() : "Medium";
             testCase.setPriority(priority);
             
-            testCase.setStatus("READY_TO_AUTOMATE");
+            testCase.setStatus("Ready to Automate");
             testCase.setProject(jiraTestCase.getProject());
             testCase.setTester(jiraTestCase.getAssignedTester());
         }

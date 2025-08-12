@@ -94,7 +94,7 @@ public class JiraTestCase {
     // Private method to update automation status
     private void updateAutomationStatus() {
         if (canBeAutomated && !cannotBeAutomated) {
-            this.automationStatus = "READY_TO_AUTOMATE";
+            this.automationStatus = "Ready to Automate";
         } else if (!canBeAutomated && cannotBeAutomated) {
             this.automationStatus = "NOT_AUTOMATABLE";
         } else {
@@ -246,7 +246,7 @@ public class JiraTestCase {
 
     // Helper methods
     public boolean isReadyToAutomate() {
-        return "READY_TO_AUTOMATE".equals(automationStatus);
+        return "Ready to Automate".equals(automationStatus);
     }
 
     public boolean isNotAutomatable() {
