@@ -182,10 +182,10 @@ public class ManualPageController {
     public ResponseEntity<Map<String, Object>> globalKeywordSearch(
             @RequestBody GlobalKeywordSearchRequest request) {
         try {
-            logger.info("Performing global keyword search for '{}' in project: {}",
-                    request.getKeyword(), request.getJiraProjectKey());
+            logger.info("Performing global keyword search for '{}' in project: {} sprint: {}",
+                    request.getKeyword(), request.getJiraProjectKey(), request.getSprintId());
             Map<String, Object> searchResults = jiraIntegrationService.searchKeywordGlobally(
-                    request.getKeyword(), request.getJiraProjectKey());
+                    request.getKeyword(), request.getJiraProjectKey(), request.getSprintId());
             return ResponseEntity.ok(searchResults);
         } catch (Exception e) {
             logger.error("Error performing global keyword search: {}", e.getMessage(), e);
@@ -488,6 +488,7 @@ public class ManualPageController {
     public static class GlobalKeywordSearchRequest {
         private String keyword;
         private String jiraProjectKey;
+        private String sprintId;  // NEW: Add sprint filter
 
         public String getKeyword() {
             return keyword;
@@ -503,6 +504,14 @@ public class ManualPageController {
 
         public void setJiraProjectKey(String jiraProjectKey) {
             this.jiraProjectKey = jiraProjectKey;
+        }
+
+        public String getSprintId() {
+            return sprintId;
+        }
+
+        public void setSprintId(String sprintId) {
+            this.sprintId = sprintId;
         }
     }
 }

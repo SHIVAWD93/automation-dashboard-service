@@ -7,6 +7,7 @@ public class JiraTestCaseDto {
     private String qtestTitle;
     private String qtestId;
     private String qtestAssignee;
+    private String qtestAssigneeDisplayName;
     private String qtestPriority;
     private String qtestAutomationStatus;
     private Boolean canBeAutomated;
@@ -62,6 +63,14 @@ public class JiraTestCaseDto {
 
     public void setQtestAssignee(String qtestAssignee) {
         this.qtestAssignee = qtestAssignee;
+    }
+
+    public String getQtestAssigneeDisplayName() {
+        return qtestAssigneeDisplayName;
+    }
+
+    public void setQtestAssigneeDisplayName(String qtestAssigneeDisplayName) {
+        this.qtestAssigneeDisplayName = qtestAssigneeDisplayName;
     }
 
     public String getQtestPriority() {
