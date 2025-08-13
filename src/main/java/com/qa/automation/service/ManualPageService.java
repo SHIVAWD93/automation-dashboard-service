@@ -431,7 +431,10 @@ public class ManualPageService {
         JiraIssue savedIssue = jiraIssueRepository.save(issue);
 
         // Sync linked test cases
-        syncLinkedTestCases(savedIssue, issueDto.getLinkedTestCases());
+        List<JiraTestCaseDto> tcOnly = issueDto.getLinkedTestCases() == null ? Collections.emptyList() : issueDto.getLinkedTestCases().stream()
+                .filter(dto -> dto.getQtestId() != null && dto.getQtestId().matches("(?i)TC-\\d+"))
+                .collect(Collectors.toList());
+        syncLinkedTestCases(savedIssue, tcOnly);
 
         return convertToDto(savedIssue);
     }
@@ -473,7 +476,15 @@ public class ManualPageService {
      * Sync linked test cases with enhanced QTest data retrieval
      */
     private void syncLinkedTestCases(JiraIssue issue, List<JiraTestCaseDto> testCaseDtos) {
-        // Get existing test cases for this issue
+        // Remove any existing non-TC test cases for this issue (cleanup old description-derived entries)
+        List<JiraTestCase> toRemove = issue.getLinkedTestCases().stream()
+                .filter(tc -> tc.getQtestId() == null || !tc.getQtestId().matches("(?i)TC-\\d+"))
+                .collect(Collectors.toList());
+        for (JiraTestCase rm : toRemove) {
+            issue.removeLinkedTestCase(rm);
+        }
+
+        // Rebuild existing keys after cleanup
         Set<String> existingTestCases = issue.getLinkedTestCases().stream()
                 .map(JiraTestCase::getQtestTitle)
                 .collect(Collectors.toSet());

@@ -145,6 +145,51 @@ public class ManualPageController {
     }
 
     /**
+     * Combined: Sync a sprint and return statistics after sync completes
+     */
+    @PostMapping("/sprints/{sprintId}/sync-and-statistics")
+    public ResponseEntity<Map<String, Object>> syncAndGetStatistics(
+            @PathVariable String sprintId,
+            @RequestParam(required = false) String jiraProjectKey,
+            @RequestParam(required = false) String jiraBoardId) {
+        try {
+            logger.info("Syncing sprint {} and returning statistics", sprintId);
+            manualPageService.fetchAndSyncSprintIssues(sprintId, jiraProjectKey, jiraBoardId);
+            Map<String, Object> stats = manualPageService.getSprintAutomationStatistics(sprintId);
+            return ResponseEntity.ok(stats);
+        } catch (Exception e) {
+            logger.error("Error syncing and fetching statistics: {}", e.getMessage(), e);
+            return ResponseEntity.badRequest().build();
+        }
+    }
+
+    /**
+     * Combined: Map test case (project/tester) and update automation flags in one call
+     */
+    @PutMapping("/test-cases/{testCaseId}/save")
+    public ResponseEntity<JiraTestCaseDto> saveMappingAndFlags(
+            @PathVariable("testCaseId") String testCaseIdStr,
+            @RequestBody SaveTestCaseRequest request) {
+        try {
+            if (testCaseIdStr == null || testCaseIdStr.trim().isEmpty() || "null".equalsIgnoreCase(testCaseIdStr.trim())) {
+                return ResponseEntity.badRequest().build();
+            }
+            Long testCaseId = Long.parseLong(testCaseIdStr.trim());
+
+            // First map project/tester if provided
+            JiraTestCaseDto dto = manualPageService.mapTestCaseToProject(testCaseId, request.getProjectId(), request.getTesterId());
+            // Then update flags
+            dto = manualPageService.updateTestCaseAutomationFlags(testCaseId, request.getCanBeAutomated(), request.getCannotBeAutomated());
+            return ResponseEntity.ok(dto);
+        } catch (NumberFormatException nfe) {
+            return ResponseEntity.badRequest().build();
+        } catch (Exception e) {
+            logger.error("Error saving mapping and flags: {}", e.getMessage(), e);
+            return ResponseEntity.badRequest().build();
+        }
+    }
+
+    /**
      * Map test case to project and assign tester
      */
     @PutMapping("/test-cases/{testCaseId}/mapping")
@@ -521,5 +566,21 @@ public class ManualPageController {
         public void setSprintId(String sprintId) {
             this.sprintId = sprintId;
         }
+    }
+
+    public static class SaveTestCaseRequest {
+        private Long projectId;
+        private Long testerId;
+        private boolean canBeAutomated;
+        private boolean cannotBeAutomated;
+
+        public Long getProjectId() { return projectId; }
+        public void setProjectId(Long projectId) { this.projectId = projectId; }
+        public Long getTesterId() { return testerId; }
+        public void setTesterId(Long testerId) { this.testerId = testerId; }
+        public boolean getCanBeAutomated() { return canBeAutomated; }
+        public void setCanBeAutomated(boolean canBeAutomated) { this.canBeAutomated = canBeAutomated; }
+        public boolean getCannotBeAutomated() { return cannotBeAutomated; }
+        public void setCannotBeAutomated(boolean cannotBeAutomated) { this.cannotBeAutomated = cannotBeAutomated; }
     }
 }

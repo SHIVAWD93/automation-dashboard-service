@@ -438,16 +438,9 @@ public class JiraIntegrationService {
             }
 
             // Enhanced: Fetch linked test cases from QTest instead of extracting from text patterns
-            List<JiraTestCaseDto> linkedTestCases = fetchLinkedTestCasesFromQTest(key);
-            
-            // Fallback: If no QTest integration or no linked test cases found, use text extraction
-            if (linkedTestCases.isEmpty()) {
-                linkedTestCases = extractLinkedTestCases(issueDto.getDescription());
-            }
-            
-            // Additionally: Parse qTest links from changelog RemoteWorkItemLink entries
-            List<JiraTestCaseDto> changelogLinked = extractQTestLinkedFromChangelog(issueNode);
-            linkedTestCases = mergeLinkedTestCases(linkedTestCases, changelogLinked);
+            // Per requirement: Only use qTest links from Jira remote/changelog (TC- only)
+            List<JiraTestCaseDto> linkedTestCases = extractQTestLinkedFromChangelog(issueNode);
+            linkedTestCases = normalizeAndFilterTcOnly(linkedTestCases);
             
             issueDto.setLinkedTestCases(linkedTestCases);
 
@@ -457,6 +450,24 @@ public class JiraIntegrationService {
             logger.error("Error parsing issue node: {}", e.getMessage(), e);
             return null;
         }
+    }
+
+    /**
+     * Normalize qTest IDs from titles and filter to TC- only
+     */
+    private List<JiraTestCaseDto> normalizeAndFilterTcOnly(List<JiraTestCaseDto> input) {
+        if (input == null || input.isEmpty()) return Collections.emptyList();
+        List<JiraTestCaseDto> result = new ArrayList<>();
+        for (JiraTestCaseDto dto : input) {
+            if (dto.getQtestId() == null || dto.getQtestId().isEmpty()) {
+                String parsed = parseQTestKey(dto.getQtestTitle());
+                if (parsed != null) dto.setQtestId(parsed);
+            }
+            if (dto.getQtestId() != null && dto.getQtestId().matches("(?i)TC-\\d+")) {
+                result.add(dto);
+            }
+        }
+        return result;
     }
 
     /**
@@ -715,6 +726,14 @@ public class JiraIntegrationService {
                 return testCases;
             }
 
+            // Get Jira issue summary for appending to TC titles
+            String jiraSummary = issueNode.path("fields").path("summary").asText("");
+            if (jiraSummary == null) jiraSummary = "";
+            // Truncate summary if too long to keep title manageable
+            if (jiraSummary.length() > 100) {
+                jiraSummary = jiraSummary.substring(0, 97) + "...";
+            }
+
             for (JsonNode history : changelogNode) {
                 JsonNode items = history.path("items");
                 if (items.isMissingNode() || !items.isArray()) {
@@ -735,6 +754,9 @@ public class JiraIntegrationService {
                         String parsedId = parseQTestKey(extractedTitle);
                         if (parsedId != null) {
                             dto.setQtestId(parsedId);
+                            // Append Jira summary to make title more descriptive
+                            String enhancedTitle = parsedId + " - " + jiraSummary;
+                            dto.setQtestTitle(enhancedTitle);
                         }
                         testCases.add(dto);
                     }
