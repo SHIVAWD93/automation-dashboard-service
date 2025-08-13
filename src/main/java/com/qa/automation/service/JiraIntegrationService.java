@@ -726,6 +726,14 @@ public class JiraIntegrationService {
                 return testCases;
             }
 
+            // Get Jira issue summary for appending to TC titles
+            String jiraSummary = issueNode.path("fields").path("summary").asText("");
+            if (jiraSummary == null) jiraSummary = "";
+            // Truncate summary if too long to keep title manageable
+            if (jiraSummary.length() > 100) {
+                jiraSummary = jiraSummary.substring(0, 97) + "...";
+            }
+
             for (JsonNode history : changelogNode) {
                 JsonNode items = history.path("items");
                 if (items.isMissingNode() || !items.isArray()) {
@@ -746,6 +754,9 @@ public class JiraIntegrationService {
                         String parsedId = parseQTestKey(extractedTitle);
                         if (parsedId != null) {
                             dto.setQtestId(parsedId);
+                            // Append Jira summary to make title more descriptive
+                            String enhancedTitle = parsedId + " - " + jiraSummary;
+                            dto.setQtestTitle(enhancedTitle);
                         }
                         testCases.add(dto);
                     }
