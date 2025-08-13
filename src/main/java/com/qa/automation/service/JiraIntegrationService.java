@@ -445,6 +445,10 @@ public class JiraIntegrationService {
                 linkedTestCases = extractLinkedTestCases(issueDto.getDescription());
             }
             
+            // Additionally: Parse qTest links from changelog RemoteWorkItemLink entries
+            List<JiraTestCaseDto> changelogLinked = extractQTestLinkedFromChangelog(issueNode);
+            linkedTestCases = mergeLinkedTestCases(linkedTestCases, changelogLinked);
+            
             issueDto.setLinkedTestCases(linkedTestCases);
 
             return issueDto;
@@ -698,5 +702,106 @@ public class JiraIntegrationService {
             logger.error("Jira connection test failed: {}", e.getMessage());
             return false;
         }
+    }
+
+    /**
+     * Extract qTest links from issue changelog (RemoteWorkItemLink entries)
+     */
+    private List<JiraTestCaseDto> extractQTestLinkedFromChangelog(JsonNode issueNode) {
+        List<JiraTestCaseDto> testCases = new ArrayList<>();
+        try {
+            JsonNode changelogNode = issueNode.path("changelog").path("histories");
+            if (changelogNode.isMissingNode() || !changelogNode.isArray()) {
+                return testCases;
+            }
+
+            for (JsonNode history : changelogNode) {
+                JsonNode items = history.path("items");
+                if (items.isMissingNode() || !items.isArray()) {
+                    continue;
+                }
+                for (JsonNode item : items) {
+                    String field = item.path("field").asText("");
+                    if (!"RemoteWorkItemLink".equals(field) && !"Link".equals(field)) {
+                        continue;
+                    }
+
+                    String toStringVal = item.path("toString").asText("");
+                    // Example: This work item links to "TC-473 (qTest)"
+                    String extractedTitle = extractQTestTitleFromToString(toStringVal);
+                    if (extractedTitle != null && !extractedTitle.isEmpty()) {
+                        JiraTestCaseDto dto = new JiraTestCaseDto(extractedTitle);
+                        // Attempt to parse qTest ID like TC-473
+                        String parsedId = parseQTestKey(extractedTitle);
+                        if (parsedId != null) {
+                            dto.setQtestId(parsedId);
+                        }
+                        testCases.add(dto);
+                    }
+                }
+            }
+        } catch (Exception e) {
+            logger.debug("Failed to extract qTest links from changelog: {}", e.getMessage());
+        }
+        return testCases;
+    }
+
+    /**
+     * Extract title from a toString like: This work item links to "TC-473 (qTest)"
+     */
+    private String extractQTestTitleFromToString(String toStringVal) {
+        if (toStringVal == null || toStringVal.isEmpty()) {
+            return null;
+        }
+        // Capture content inside the last quoted segment
+        int firstQuote = toStringVal.indexOf('"');
+        int lastQuote = toStringVal.lastIndexOf('"');
+        if (firstQuote >= 0 && lastQuote > firstQuote) {
+            return toStringVal.substring(firstQuote + 1, lastQuote).trim();
+        }
+        // Fallback: if contains (qTest), return the suffix
+        if (toStringVal.toLowerCase().contains("qtest")) {
+            return toStringVal.trim();
+        }
+        return null;
+    }
+
+    /**
+     * Parse qTest key like TC-473 from text
+     */
+    private String parseQTestKey(String text) {
+        if (text == null) return null;
+        Matcher m = Pattern.compile("(TC-\\d+)", Pattern.CASE_INSENSITIVE).matcher(text);
+        if (m.find()) {
+            return m.group(1).toUpperCase(Locale.ROOT);
+        }
+        return null;
+    }
+
+    /**
+     * Merge two lists of JiraTestCaseDto, de-duplicating by qtestId or qtestTitle
+     */
+    private List<JiraTestCaseDto> mergeLinkedTestCases(List<JiraTestCaseDto> base, List<JiraTestCaseDto> additions) {
+        if (base == null || base.isEmpty()) {
+            return additions == null ? new ArrayList<>() : new ArrayList<>(additions);
+        }
+        if (additions == null || additions.isEmpty()) {
+            return base;
+        }
+        Map<String, JiraTestCaseDto> byKey = new LinkedHashMap<>();
+        for (JiraTestCaseDto dto : base) {
+            String key = (dto.getQtestId() != null && !dto.getQtestId().isEmpty())
+                    ? ("ID:" + dto.getQtestId())
+                    : ("TITLE:" + (dto.getQtestTitle() != null ? dto.getQtestTitle() : UUID.randomUUID().toString()));
+            byKey.put(key, dto);
+        }
+        for (JiraTestCaseDto dto : additions) {
+            String key = (dto.getQtestId() != null && !dto.getQtestId().isEmpty())
+                    ? ("ID:" + dto.getQtestId())
+                    : ("TITLE:" + (dto.getQtestTitle() != null ? dto.getQtestTitle() : UUID.randomUUID().toString()));
+            // If exists, prefer existing; otherwise add
+            byKey.putIfAbsent(key, dto);
+        }
+        return new ArrayList<>(byKey.values());
     }
 }
