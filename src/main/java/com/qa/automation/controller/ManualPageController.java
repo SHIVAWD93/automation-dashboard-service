@@ -120,9 +120,14 @@ public class ManualPageController {
      */
     @PutMapping("/test-cases/{testCaseId}/automation-flags")
     public ResponseEntity<JiraTestCaseDto> updateAutomationFlags(
-            @PathVariable Long testCaseId,
+            @PathVariable("testCaseId") String testCaseIdStr,
             @RequestBody AutomationFlagsRequest request) {
         try {
+            if (testCaseIdStr == null || testCaseIdStr.trim().isEmpty() || "null".equalsIgnoreCase(testCaseIdStr.trim())) {
+                logger.warn("Received null/empty testCaseId in path: {}", testCaseIdStr);
+                return ResponseEntity.badRequest().build();
+            }
+            Long testCaseId = Long.parseLong(testCaseIdStr.trim());
             logger.info("Updating automation flags for test case: {}", testCaseId);
             JiraTestCaseDto updatedTestCase = manualPageService.updateTestCaseAutomationFlags(
                     testCaseId,
@@ -130,6 +135,9 @@ public class ManualPageController {
                     request.getCannotBeAutomated()
             );
             return ResponseEntity.ok(updatedTestCase);
+        } catch (NumberFormatException nfe) {
+            logger.warn("Invalid testCaseId path value: {}", testCaseIdStr);
+            return ResponseEntity.badRequest().build();
         } catch (Exception e) {
             logger.error("Error updating automation flags: {}", e.getMessage(), e);
             return ResponseEntity.badRequest().build();
