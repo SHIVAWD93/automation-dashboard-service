@@ -438,16 +438,9 @@ public class JiraIntegrationService {
             }
 
             // Enhanced: Fetch linked test cases from QTest instead of extracting from text patterns
-            List<JiraTestCaseDto> linkedTestCases = fetchLinkedTestCasesFromQTest(key);
-            
-            // Fallback: If no QTest integration or no linked test cases found, use text extraction
-            if (linkedTestCases.isEmpty()) {
-                linkedTestCases = extractLinkedTestCases(issueDto.getDescription());
-            }
-            
-            // Additionally: Parse qTest links from changelog RemoteWorkItemLink entries
-            List<JiraTestCaseDto> changelogLinked = extractQTestLinkedFromChangelog(issueNode);
-            linkedTestCases = mergeLinkedTestCases(linkedTestCases, changelogLinked);
+            // Per requirement: Only use qTest links from Jira remote/changelog (TC- only)
+            List<JiraTestCaseDto> linkedTestCases = extractQTestLinkedFromChangelog(issueNode);
+            linkedTestCases = normalizeAndFilterTcOnly(linkedTestCases);
             
             issueDto.setLinkedTestCases(linkedTestCases);
 
@@ -457,6 +450,24 @@ public class JiraIntegrationService {
             logger.error("Error parsing issue node: {}", e.getMessage(), e);
             return null;
         }
+    }
+
+    /**
+     * Normalize qTest IDs from titles and filter to TC- only
+     */
+    private List<JiraTestCaseDto> normalizeAndFilterTcOnly(List<JiraTestCaseDto> input) {
+        if (input == null || input.isEmpty()) return Collections.emptyList();
+        List<JiraTestCaseDto> result = new ArrayList<>();
+        for (JiraTestCaseDto dto : input) {
+            if (dto.getQtestId() == null || dto.getQtestId().isEmpty()) {
+                String parsed = parseQTestKey(dto.getQtestTitle());
+                if (parsed != null) dto.setQtestId(parsed);
+            }
+            if (dto.getQtestId() != null && dto.getQtestId().matches("(?i)TC-\\d+")) {
+                result.add(dto);
+            }
+        }
+        return result;
     }
 
     /**
