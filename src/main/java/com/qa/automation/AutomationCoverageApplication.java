@@ -1,14 +1,11 @@
 package com.qa.automation;
 
-import com.qa.automation.model.Tester;
-import com.qa.automation.model.User;
+import com.qa.automation.model.Domain;
 import com.qa.automation.model.UserPermission;
+import com.qa.automation.repository.DomainRepository;
 import com.qa.automation.repository.PermissionRepository;
-import com.qa.automation.repository.TesterRepository;
-import com.qa.automation.repository.UserRepository;
-import com.qa.automation.service.DataInitializationService;
-import java.security.Permission;
 import java.time.LocalDateTime;
+import java.util.Arrays;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
@@ -18,19 +15,5 @@ import org.springframework.context.annotation.Bean;
 public class AutomationCoverageApplication {
     public static void main(String[] args) {
         SpringApplication.run(AutomationCoverageApplication.class, args);
-    }
-    @Bean
-    CommandLineRunner initDatabase(PermissionRepository repository, UserRepository userRepository, DataInitializationService dataInitService) {
-        return args -> {
-            // Initialize permissions and users first
-//            repository.save(new UserPermission( 1L,"read", LocalDateTime.now(),LocalDateTime.now()));
-//            repository.save(new UserPermission( 2L,"write", LocalDateTime.now(),LocalDateTime.now()));
-//            userRepository.save(new User("admin","admin","admin",repository.findById(2L).get()));
-            
-            // Initialize basic data to prevent constraint violations
-        //    dataInitService.initializeBasicData();
-            
-            System.out.println("Database initialization completed");
-        };
     }
 }
