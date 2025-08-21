@@ -13,6 +13,8 @@ public class UserDto {
     private String role;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
+    private String token;
+    private String permission;
 
     public String getUserName() {
         return userName;
@@ -20,6 +22,14 @@ public class UserDto {
 
     public void setUserName(String userName) {
         this.userName = userName;
+    }
+
+    public String getPermission() {
+        return permission;
+    }
+
+    public void setPermission(String permission) {
+        this.permission = permission;
     }
 
     public UserDto(String userName, String password, LocalDateTime createdAt, String role, LocalDateTime updatedAt, Long userPermission) {
@@ -65,6 +75,14 @@ public class UserDto {
 
     public Long getUserPermission() {
         return userPermission;
+    }
+
+    public String getToken() {
+        return token;
+    }
+
+    public void setToken(String token) {
+        this.token = token;
     }
 
     public void setUserPermission(Long userPermission) {

@@ -16,8 +16,8 @@ public class UserController {
     private UserService userService;
 
     @GetMapping("")
-    public ResponseEntity<User> getUser(@RequestParam String userName, @RequestParam String password) {
-        User user = userService.getUserDetails(userName, password);
+    public ResponseEntity<UserDto> getUser(@RequestParam String userName, @RequestParam String password) {
+        UserDto user = userService.getUserDetails(userName, password);
         if (user != null) {
             user.setPassword(null);
             return ResponseEntity.ok(user); // 200 OK with user data
