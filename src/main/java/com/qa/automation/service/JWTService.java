@@ -8,6 +8,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.stereotype.Service;
 
+import jakarta.annotation.PostConstruct;
 import javax.crypto.KeyGenerator;
 import javax.crypto.SecretKey;
 import java.security.NoSuchAlgorithmException;
@@ -21,19 +22,27 @@ import java.util.function.Function;
 public class JWTService {
 
 
+    @Value("${jwt.secret.key:}")
     private String secretkey = "";
 
     @Value("${token.refresh.time}")
     private int tokenRefreshTime = 60 * 60 * 30;
 
-    public JWTService() {
-
-        try {
-            KeyGenerator keyGen = KeyGenerator.getInstance("HmacSHA256");
-            SecretKey sk = keyGen.generateKey();
-            secretkey = Base64.getEncoder().encodeToString(sk.getEncoded());
-        } catch (NoSuchAlgorithmException e) {
-            throw new RuntimeException(e);
+    @PostConstruct
+    public void initializeSecretKey() {
+        // If no secret key is configured, generate one for development
+        if (secretkey == null || secretkey.trim().isEmpty()) {
+            try {
+                KeyGenerator keyGen = KeyGenerator.getInstance("HmacSHA256");
+                SecretKey sk = keyGen.generateKey();
+                secretkey = Base64.getEncoder().encodeToString(sk.getEncoded());
+                System.out.println("WARNING: Using generated JWT secret key. For production, set jwt.secret.key property.");
+                System.out.println("Generated key: " + secretkey);
+            } catch (NoSuchAlgorithmException e) {
+                throw new RuntimeException(e);
+            }
+        } else {
+            System.out.println("Using configured JWT secret key");
         }
     }
 

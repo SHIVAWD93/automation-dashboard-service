@@ -67,27 +67,20 @@ public class JiraIntegrationService {
 
             String jql = String.format("sprint = %s AND project = %s", sprintId, projectKey);
 
-            // Use POST to the regular search endpoint to avoid 410 error
-            String url = "/rest/api/3/search";
-            
-            // Create request body for search
-            Map<String, Object> requestBody = new HashMap<>();
-            requestBody.put("jql", jql);
-            requestBody.put("maxResults", 1000);
-            requestBody.put("expand", Arrays.asList("changelog"));
-            // Include explicit field list to ensure we get all necessary data
-            requestBody.put("fields", Arrays.asList(
-                "summary", "description", "issuetype", "status", "priority", "assignee", 
-                "created", "updated", "customfield_10020", "customfield_11051"
-            ));
+            // Use the new search/jql endpoint as required by Jira deprecation
+            String url = UriComponentsBuilder.fromPath("/rest/api/3/search/jql")
+                    .queryParam("jql", jql)
+                    .queryParam("maxResults", 1000)
+                    .queryParam("expand", "changelog")
+                    .queryParam("fields", "summary,description,issuetype,status,priority,assignee,created,updated,customfield_10020,customfield_11051")
+                    .toUriString();
 
             logger.info("Fetching Jira issues from sprint: {} using JQL: {} (Project: {})",
                     sprintId, jql, projectKey);
-            logger.debug("Request URL: {} with body: {}", url, requestBody);
+            logger.debug("Request URL: {}", url);
 
-            String response = jiraWebClient.post()
+            String response = jiraWebClient.get()
                     .uri(url)
-                    .bodyValue(requestBody)
                     .retrieve()
                     .bodyToMono(String.class)
                     .timeout(Duration.ofSeconds(30))
@@ -822,25 +815,20 @@ public class JiraIntegrationService {
 
             String jql = String.format("sprint = %s AND project = %s", sprintId, projectKey);
 
-            // Use POST to the regular search endpoint
-            String url = "/rest/api/3/search";
-            
-            // Create request body for search
-            Map<String, Object> requestBody = new HashMap<>();
-            requestBody.put("jql", jql);
-            requestBody.put("maxResults", 10); // Limit for debug
-            requestBody.put("expand", Arrays.asList("changelog"));
-            requestBody.put("fields", Arrays.asList(
-                "summary", "description", "issuetype", "status", "priority", "assignee", 
-                "created", "updated", "customfield_10020", "customfield_11051"
-            ));
+            // Use the new search/jql endpoint as required by Jira deprecation
+            String url = UriComponentsBuilder.fromPath("/rest/api/3/search/jql")
+                    .queryParam("jql", jql)
+                    .queryParam("maxResults", 10) // Limit for debug
+                    .queryParam("expand", "changelog")
+                    .queryParam("fields", "summary,description,issuetype,status,priority,assignee,created,updated,customfield_10020,customfield_11051")
+                    .toUriString();
 
             logger.info("DEBUG: Fetching Jira issues from sprint: {} using JQL: {} (Project: {})",
                     sprintId, jql, projectKey);
+            logger.debug("DEBUG Request URL: {}", url);
 
-            String response = jiraWebClient.post()
+            String response = jiraWebClient.get()
                     .uri(url)
-                    .bodyValue(requestBody)
                     .retrieve()
                     .bodyToMono(String.class)
                     .timeout(Duration.ofSeconds(30))
@@ -848,7 +836,6 @@ public class JiraIntegrationService {
 
             debugInfo.put("jql", jql);
             debugInfo.put("url", url);
-            debugInfo.put("requestBody", requestBody);
             debugInfo.put("rawResponse", response);
             
             // Try to parse and show structure
