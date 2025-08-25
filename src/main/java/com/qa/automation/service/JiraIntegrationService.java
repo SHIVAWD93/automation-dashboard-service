@@ -68,19 +68,17 @@ public class JiraIntegrationService {
             String jql = String.format("sprint = %s AND project = %s", sprintId, projectKey);
 
             // Use the new search/jql endpoint as required by Jira deprecation
-            String url = UriComponentsBuilder.fromPath("/rest/api/3/search/jql")
-                    .queryParam("jql", jql)
-                    .queryParam("maxResults", 1000)
-                    .queryParam("expand", "changelog")
-                    .queryParam("fields", "summary,description,issuetype,status,priority,assignee,created,updated,customfield_10020,customfield_11051")
-                    .toUriString();
-
             logger.info("Fetching Jira issues from sprint: {} using JQL: {} (Project: {})",
                     sprintId, jql, projectKey);
-            logger.debug("Request URL: {}", url);
 
             String response = jiraWebClient.get()
-                    .uri(url)
+                    .uri(uriBuilder -> uriBuilder
+                            .path("/rest/api/3/search/jql")
+                            .queryParam("jql", jql)
+                            .queryParam("maxResults", 1000)
+                            .queryParam("expand", "changelog")
+                            .queryParam("fields", "summary,description,issuetype,status,priority,assignee,created,updated,customfield_10020,customfield_11051")
+                            .build())
                     .retrieve()
                     .bodyToMono(String.class)
                     .timeout(Duration.ofSeconds(30))
@@ -219,18 +217,16 @@ public class JiraIntegrationService {
                         projectKey, keyword, keyword, keyword);
             }
 
-            String url = UriComponentsBuilder.fromPath("/rest/api/3/search/jql")
-                    .queryParam("jql", jql)
-                    .queryParam("maxResults", 1000)
-                    .queryParam("fields", "key,summary,issuetype,status,priority")
-                    .build()
-                    .toUriString();
-
             logger.info("Performing global keyword search for '{}' in project: {} sprint: {}", 
                     keyword, projectKey, sprintId != null ? sprintId : "ALL");
 
             String response = jiraWebClient.get()
-                    .uri(url)
+                    .uri(uriBuilder -> uriBuilder
+                            .path("/rest/api/3/search/jql")
+                            .queryParam("jql", jql)
+                            .queryParam("maxResults", 1000)
+                            .queryParam("fields", "key,summary,issuetype,status,priority")
+                            .build())
                     .retrieve()
                     .bodyToMono(String.class)
                     .timeout(Duration.ofSeconds(30))
@@ -816,26 +812,24 @@ public class JiraIntegrationService {
             String jql = String.format("sprint = %s AND project = %s", sprintId, projectKey);
 
             // Use the new search/jql endpoint as required by Jira deprecation
-            String url = UriComponentsBuilder.fromPath("/rest/api/3/search/jql")
-                    .queryParam("jql", jql)
-                    .queryParam("maxResults", 10) // Limit for debug
-                    .queryParam("expand", "changelog")
-                    .queryParam("fields", "summary,description,issuetype,status,priority,assignee,created,updated,customfield_10020,customfield_11051")
-                    .toUriString();
-
             logger.info("DEBUG: Fetching Jira issues from sprint: {} using JQL: {} (Project: {})",
                     sprintId, jql, projectKey);
-            logger.debug("DEBUG Request URL: {}", url);
 
             String response = jiraWebClient.get()
-                    .uri(url)
+                    .uri(uriBuilder -> uriBuilder
+                            .path("/rest/api/3/search/jql")
+                            .queryParam("jql", jql)
+                            .queryParam("maxResults", 10) // Limit for debug
+                            .queryParam("expand", "changelog")
+                            .queryParam("fields", "summary,description,issuetype,status,priority,assignee,created,updated,customfield_10020,customfield_11051")
+                            .build())
                     .retrieve()
                     .bodyToMono(String.class)
                     .timeout(Duration.ofSeconds(30))
                     .block();
 
             debugInfo.put("jql", jql);
-            debugInfo.put("url", url);
+            debugInfo.put("endpoint", "/rest/api/3/search/jql");
             debugInfo.put("rawResponse", response);
             
             // Try to parse and show structure
