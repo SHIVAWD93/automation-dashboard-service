@@ -67,15 +67,19 @@ public class JiraIntegrationService {
 
             String jql = String.format("sprint = %s AND project = %s", sprintId, projectKey);
 
-            // Try the new /search/jql endpoint with POST request
-            String url = "/rest/api/3/search/jql";
+            // Use POST to the regular search endpoint to avoid 410 error
+            String url = "/rest/api/3/search";
             
-            // Create request body for JQL search
+            // Create request body for search
             Map<String, Object> requestBody = new HashMap<>();
             requestBody.put("jql", jql);
             requestBody.put("maxResults", 1000);
             requestBody.put("expand", Arrays.asList("changelog"));
-            requestBody.put("fields", Arrays.asList("summary", "description", "issuetype", "status", "priority", "assignee", "customfield_10020", "customfield_11051"));
+            // Include explicit field list to ensure we get all necessary data
+            requestBody.put("fields", Arrays.asList(
+                "summary", "description", "issuetype", "status", "priority", "assignee", 
+                "created", "updated", "customfield_10020", "customfield_11051"
+            ));
 
             logger.info("Fetching Jira issues from sprint: {} using JQL: {} (Project: {})",
                     sprintId, jql, projectKey);
@@ -818,15 +822,18 @@ public class JiraIntegrationService {
 
             String jql = String.format("sprint = %s AND project = %s", sprintId, projectKey);
 
-            // Try the new /search/jql endpoint with POST request
-            String url = "/rest/api/3/search/jql";
+            // Use POST to the regular search endpoint
+            String url = "/rest/api/3/search";
             
-            // Create request body for JQL search
+            // Create request body for search
             Map<String, Object> requestBody = new HashMap<>();
             requestBody.put("jql", jql);
             requestBody.put("maxResults", 10); // Limit for debug
             requestBody.put("expand", Arrays.asList("changelog"));
-            requestBody.put("fields", Arrays.asList("summary", "description", "issuetype", "status", "priority", "assignee", "customfield_10020", "customfield_11051"));
+            requestBody.put("fields", Arrays.asList(
+                "summary", "description", "issuetype", "status", "priority", "assignee", 
+                "created", "updated", "customfield_10020", "customfield_11051"
+            ));
 
             logger.info("DEBUG: Fetching Jira issues from sprint: {} using JQL: {} (Project: {})",
                     sprintId, jql, projectKey);
