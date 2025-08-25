@@ -67,24 +67,29 @@ public class JiraIntegrationService {
 
             String jql = String.format("sprint = %s AND project = %s", sprintId, projectKey);
 
-            String url = UriComponentsBuilder.fromPath("/rest/api/3/search/jql")
-                    .queryParam("jql", jql)
-                    .queryParam("maxResults", 1000)
-                    .queryParam("expand", "changelog,renderedFields,names,schema,operations,editmeta,versionedRepresentations")
-                    .build()
-                    .toUriString();
+            // Try the new /search/jql endpoint with POST request
+            String url = "/rest/api/3/search/jql";
+            
+            // Create request body for JQL search
+            Map<String, Object> requestBody = new HashMap<>();
+            requestBody.put("jql", jql);
+            requestBody.put("maxResults", 1000);
+            requestBody.put("expand", Arrays.asList("changelog"));
+            requestBody.put("fields", Arrays.asList("summary", "description", "issuetype", "status", "priority", "assignee", "customfield_10020", "customfield_11051"));
 
             logger.info("Fetching Jira issues from sprint: {} using JQL: {} (Project: {})",
                     sprintId, jql, projectKey);
-            logger.debug("Request URL: {}", url);
+            logger.debug("Request URL: {} with body: {}", url, requestBody);
 
-            String response = jiraWebClient.get()
+            String response = jiraWebClient.post()
                     .uri(url)
+                    .bodyValue(requestBody)
                     .retrieve()
                     .bodyToMono(String.class)
                     .timeout(Duration.ofSeconds(30))
                     .block();
 
+            logger.debug("Raw Jira API Response for sprint {}: {}", sprintId, response);
             return parseJiraResponse(response, sprintId);
 
         } catch (WebClientResponseException e) {
@@ -386,9 +391,18 @@ public class JiraIntegrationService {
             JsonNode issuesNode = rootNode.path("issues");
 
             for (JsonNode issueNode : issuesNode) {
-                JiraIssueDto issueDto = parseIssueNode(issueNode, sprintId);
-                if (issueDto != null) {
-                    issues.add(issueDto);
+                try {
+                    logger.debug("Parsing issue node: {}", issueNode.path("key").asText());
+                    JiraIssueDto issueDto = parseIssueNode(issueNode, sprintId);
+                    if (issueDto != null) {
+                        issues.add(issueDto);
+                        logger.debug("Successfully parsed issue: {} with summary: '{}', status: '{}', assignee: '{}'", 
+                            issueDto.getJiraKey(), issueDto.getSummary(), issueDto.getStatus(), issueDto.getAssignee());
+                    } else {
+                        logger.warn("Failed to parse issue node for key: {}", issueNode.path("key").asText());
+                    }
+                } catch (Exception e) {
+                    logger.error("Error parsing individual issue {}: {}", issueNode.path("key").asText(), e.getMessage(), e);
                 }
             }
 
@@ -412,10 +426,13 @@ public class JiraIntegrationService {
             JiraIssueDto issueDto = new JiraIssueDto();
             issueDto.setJiraKey(key);
             
+            logger.debug("Processing issue {}: fields available: {}", key, fields.fieldNames());
+            
             // Extract summary safely
             String summary = fields.path("summary").asText();
+            logger.debug("Issue {} summary raw value: '{}'", key, summary);
             if (summary == null || summary.isEmpty() || "null".equals(summary)) {
-                logger.debug("Missing summary for issue: {}", key);
+                logger.warn("Missing or empty summary for issue: {}", key);
                 summary = "";
             }
             issueDto.setSummary(summary);
@@ -432,16 +449,18 @@ public class JiraIntegrationService {
             
             // Extract issue type safely
             String issueType = fields.path("issuetype").path("name").asText();
+            logger.debug("Issue {} issueType raw value: '{}'", key, issueType);
             if (issueType == null || issueType.isEmpty() || "null".equals(issueType)) {
-                logger.debug("Missing issue type for issue: {}", key);
+                logger.warn("Missing issue type for issue: {}", key);
                 issueType = "";
             }
             issueDto.setIssueType(issueType);
             
             // Extract status safely
             String status = fields.path("status").path("name").asText();
+            logger.debug("Issue {} status raw value: '{}'", key, status);
             if (status == null || status.isEmpty() || "null".equals(status)) {
-                logger.debug("Missing status for issue: {}", key);
+                logger.warn("Missing status for issue: {}", key);
                 status = "";
             }
             issueDto.setStatus(status);
