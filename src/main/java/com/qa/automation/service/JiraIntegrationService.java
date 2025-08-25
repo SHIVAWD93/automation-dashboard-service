@@ -67,7 +67,7 @@ public class JiraIntegrationService {
 
             String jql = String.format("sprint = %s AND project = %s", sprintId, projectKey);
 
-            String url = UriComponentsBuilder.fromPath("/rest/api/3/search")
+            String url = UriComponentsBuilder.fromPath("/rest/api/3/search/jql")
                     .queryParam("jql", jql)
                     .queryParam("maxResults", 1000)
                     .queryParam("expand", "changelog,renderedFields,names,schema,operations,editmeta,versionedRepresentations")
@@ -217,7 +217,7 @@ public class JiraIntegrationService {
                         projectKey, keyword, keyword, keyword);
             }
 
-            String url = UriComponentsBuilder.fromPath("/rest/api/2/search")
+            String url = UriComponentsBuilder.fromPath("/rest/api/3/search/jql")
                     .queryParam("jql", jql)
                     .queryParam("maxResults", 1000)
                     .queryParam("fields", "key,summary,issuetype,status,priority")
@@ -255,7 +255,7 @@ public class JiraIntegrationService {
         }
 
         try {
-            String url = String.format("/rest/api/2/issue/%s/comment", issueKey);
+            String url = String.format("/rest/api/3/issue/%s/comment", issueKey);
 
             logger.debug("Searching for keyword '{}' in comments of issue: {}", keyword, issueKey);
 
@@ -790,7 +790,7 @@ public class JiraIntegrationService {
 
         try {
             String response = jiraWebClient.get()
-                    .uri("/rest/api/2/myself")
+                    .uri("/rest/api/3/myself")
                     .retrieve()
                     .bodyToMono(String.class)
                     .timeout(Duration.ofSeconds(10))
