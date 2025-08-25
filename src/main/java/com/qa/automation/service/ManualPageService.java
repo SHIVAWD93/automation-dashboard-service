@@ -183,6 +183,14 @@ public class ManualPageService {
     }
 
     /**
+     * DEBUG: Get raw Jira response for debugging
+     */
+    public Map<String, Object> getDebugJiraResponse(String sprintId, String jiraProjectKey, String jiraBoardId) {
+        logger.info("Getting debug Jira response for sprint: {} (Project: {}, Board: {})", sprintId, jiraProjectKey, jiraBoardId);
+        return jiraIntegrationService.getDebugJiraResponse(sprintId, jiraProjectKey, jiraBoardId);
+    }
+
+    /**
      * Get automation statistics for a sprint
      */
     public Map<String, Object> getSprintAutomationStatistics(String sprintId) {

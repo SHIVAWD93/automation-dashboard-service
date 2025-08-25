@@ -67,24 +67,33 @@ public class JiraIntegrationService {
 
             String jql = String.format("sprint = %s AND project = %s", sprintId, projectKey);
 
-            String url = UriComponentsBuilder.fromPath("/rest/api/3/search/jql")
-                    .queryParam("jql", jql)
-                    .queryParam("maxResults", 1000)
-                    .queryParam("expand", "changelog,renderedFields,names,schema,operations,editmeta,versionedRepresentations")
-                    .build()
-                    .toUriString();
+            // Use POST to the regular search endpoint to avoid 410 error
+            String url = "/rest/api/3/search";
+            
+            // Create request body for search
+            Map<String, Object> requestBody = new HashMap<>();
+            requestBody.put("jql", jql);
+            requestBody.put("maxResults", 1000);
+            requestBody.put("expand", Arrays.asList("changelog"));
+            // Include explicit field list to ensure we get all necessary data
+            requestBody.put("fields", Arrays.asList(
+                "summary", "description", "issuetype", "status", "priority", "assignee", 
+                "created", "updated", "customfield_10020", "customfield_11051"
+            ));
 
             logger.info("Fetching Jira issues from sprint: {} using JQL: {} (Project: {})",
                     sprintId, jql, projectKey);
-            logger.debug("Request URL: {}", url);
+            logger.debug("Request URL: {} with body: {}", url, requestBody);
 
-            String response = jiraWebClient.get()
+            String response = jiraWebClient.post()
                     .uri(url)
+                    .bodyValue(requestBody)
                     .retrieve()
                     .bodyToMono(String.class)
                     .timeout(Duration.ofSeconds(30))
                     .block();
 
+            logger.debug("Raw Jira API Response for sprint {}: {}", sprintId, response);
             return parseJiraResponse(response, sprintId);
 
         } catch (WebClientResponseException e) {
@@ -386,9 +395,18 @@ public class JiraIntegrationService {
             JsonNode issuesNode = rootNode.path("issues");
 
             for (JsonNode issueNode : issuesNode) {
-                JiraIssueDto issueDto = parseIssueNode(issueNode, sprintId);
-                if (issueDto != null) {
-                    issues.add(issueDto);
+                try {
+                    logger.debug("Parsing issue node: {}", issueNode.path("key").asText());
+                    JiraIssueDto issueDto = parseIssueNode(issueNode, sprintId);
+                    if (issueDto != null) {
+                        issues.add(issueDto);
+                        logger.debug("Successfully parsed issue: {} with summary: '{}', status: '{}', assignee: '{}'", 
+                            issueDto.getJiraKey(), issueDto.getSummary(), issueDto.getStatus(), issueDto.getAssignee());
+                    } else {
+                        logger.warn("Failed to parse issue node for key: {}", issueNode.path("key").asText());
+                    }
+                } catch (Exception e) {
+                    logger.error("Error parsing individual issue {}: {}", issueNode.path("key").asText(), e.getMessage(), e);
                 }
             }
 
@@ -412,10 +430,13 @@ public class JiraIntegrationService {
             JiraIssueDto issueDto = new JiraIssueDto();
             issueDto.setJiraKey(key);
             
+            logger.debug("Processing issue {}: fields available: {}", key, fields.fieldNames());
+            
             // Extract summary safely
             String summary = fields.path("summary").asText();
+            logger.debug("Issue {} summary raw value: '{}'", key, summary);
             if (summary == null || summary.isEmpty() || "null".equals(summary)) {
-                logger.debug("Missing summary for issue: {}", key);
+                logger.warn("Missing or empty summary for issue: {}", key);
                 summary = "";
             }
             issueDto.setSummary(summary);
@@ -432,16 +453,18 @@ public class JiraIntegrationService {
             
             // Extract issue type safely
             String issueType = fields.path("issuetype").path("name").asText();
+            logger.debug("Issue {} issueType raw value: '{}'", key, issueType);
             if (issueType == null || issueType.isEmpty() || "null".equals(issueType)) {
-                logger.debug("Missing issue type for issue: {}", key);
+                logger.warn("Missing issue type for issue: {}", key);
                 issueType = "";
             }
             issueDto.setIssueType(issueType);
             
             // Extract status safely
             String status = fields.path("status").path("name").asText();
+            logger.debug("Issue {} status raw value: '{}'", key, status);
             if (status == null || status.isEmpty() || "null".equals(status)) {
-                logger.debug("Missing status for issue: {}", key);
+                logger.warn("Missing status for issue: {}", key);
                 status = "";
             }
             issueDto.setStatus(status);
@@ -777,6 +800,88 @@ public class JiraIntegrationService {
             for (JsonNode child : node.path("content")) {
                 extractTextRecursive(child, text);
             }
+        }
+    }
+
+    /**
+     * DEBUG: Get raw Jira response for debugging
+     */
+    public Map<String, Object> getDebugJiraResponse(String sprintId, String jiraProjectKey, String jiraBoardId) {
+        Map<String, Object> debugInfo = new HashMap<>();
+        
+        if (!jiraConfig.isConfigured()) {
+            debugInfo.put("error", "Jira configuration is not complete");
+            return debugInfo;
+        }
+
+        try {
+            // Use provided project key or fall back to default
+            String projectKey = (jiraProjectKey != null && !jiraProjectKey.trim().isEmpty())
+                    ? jiraProjectKey
+                    : jiraConfig.getJiraProjectKey();
+
+            String jql = String.format("sprint = %s AND project = %s", sprintId, projectKey);
+
+            // Use POST to the regular search endpoint
+            String url = "/rest/api/3/search";
+            
+            // Create request body for search
+            Map<String, Object> requestBody = new HashMap<>();
+            requestBody.put("jql", jql);
+            requestBody.put("maxResults", 10); // Limit for debug
+            requestBody.put("expand", Arrays.asList("changelog"));
+            requestBody.put("fields", Arrays.asList(
+                "summary", "description", "issuetype", "status", "priority", "assignee", 
+                "created", "updated", "customfield_10020", "customfield_11051"
+            ));
+
+            logger.info("DEBUG: Fetching Jira issues from sprint: {} using JQL: {} (Project: {})",
+                    sprintId, jql, projectKey);
+
+            String response = jiraWebClient.post()
+                    .uri(url)
+                    .bodyValue(requestBody)
+                    .retrieve()
+                    .bodyToMono(String.class)
+                    .timeout(Duration.ofSeconds(30))
+                    .block();
+
+            debugInfo.put("jql", jql);
+            debugInfo.put("url", url);
+            debugInfo.put("requestBody", requestBody);
+            debugInfo.put("rawResponse", response);
+            
+            // Try to parse and show structure
+            try {
+                JsonNode rootNode = objectMapper.readTree(response);
+                debugInfo.put("parsedResponse", rootNode);
+                
+                JsonNode issuesNode = rootNode.path("issues");
+                debugInfo.put("issuesCount", issuesNode.size());
+                
+                if (issuesNode.size() > 0) {
+                    JsonNode firstIssue = issuesNode.get(0);
+                    debugInfo.put("firstIssueKey", firstIssue.path("key").asText());
+                    debugInfo.put("firstIssueFields", firstIssue.path("fields"));
+                    
+                    // Show available field names
+                    List<String> availableFields = new ArrayList<>();
+                    firstIssue.path("fields").fieldNames().forEachRemaining(availableFields::add);
+                    debugInfo.put("availableFields", availableFields);
+                }
+                
+            } catch (Exception parseEx) {
+                debugInfo.put("parseError", parseEx.getMessage());
+            }
+
+            return debugInfo;
+
+        } catch (WebClientResponseException e) {
+            debugInfo.put("error", "HTTP " + e.getStatusCode() + ": " + e.getResponseBodyAsString());
+            return debugInfo;
+        } catch (Exception e) {
+            debugInfo.put("error", "Unexpected error: " + e.getMessage());
+            return debugInfo;
         }
     }
 
