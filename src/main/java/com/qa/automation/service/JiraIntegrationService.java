@@ -800,6 +800,85 @@ public class JiraIntegrationService {
     }
 
     /**
+     * DEBUG: Get raw Jira response for debugging
+     */
+    public Map<String, Object> getDebugJiraResponse(String sprintId, String jiraProjectKey, String jiraBoardId) {
+        Map<String, Object> debugInfo = new HashMap<>();
+        
+        if (!jiraConfig.isConfigured()) {
+            debugInfo.put("error", "Jira configuration is not complete");
+            return debugInfo;
+        }
+
+        try {
+            // Use provided project key or fall back to default
+            String projectKey = (jiraProjectKey != null && !jiraProjectKey.trim().isEmpty())
+                    ? jiraProjectKey
+                    : jiraConfig.getJiraProjectKey();
+
+            String jql = String.format("sprint = %s AND project = %s", sprintId, projectKey);
+
+            // Try the new /search/jql endpoint with POST request
+            String url = "/rest/api/3/search/jql";
+            
+            // Create request body for JQL search
+            Map<String, Object> requestBody = new HashMap<>();
+            requestBody.put("jql", jql);
+            requestBody.put("maxResults", 10); // Limit for debug
+            requestBody.put("expand", Arrays.asList("changelog"));
+            requestBody.put("fields", Arrays.asList("summary", "description", "issuetype", "status", "priority", "assignee", "customfield_10020", "customfield_11051"));
+
+            logger.info("DEBUG: Fetching Jira issues from sprint: {} using JQL: {} (Project: {})",
+                    sprintId, jql, projectKey);
+
+            String response = jiraWebClient.post()
+                    .uri(url)
+                    .bodyValue(requestBody)
+                    .retrieve()
+                    .bodyToMono(String.class)
+                    .timeout(Duration.ofSeconds(30))
+                    .block();
+
+            debugInfo.put("jql", jql);
+            debugInfo.put("url", url);
+            debugInfo.put("requestBody", requestBody);
+            debugInfo.put("rawResponse", response);
+            
+            // Try to parse and show structure
+            try {
+                JsonNode rootNode = objectMapper.readTree(response);
+                debugInfo.put("parsedResponse", rootNode);
+                
+                JsonNode issuesNode = rootNode.path("issues");
+                debugInfo.put("issuesCount", issuesNode.size());
+                
+                if (issuesNode.size() > 0) {
+                    JsonNode firstIssue = issuesNode.get(0);
+                    debugInfo.put("firstIssueKey", firstIssue.path("key").asText());
+                    debugInfo.put("firstIssueFields", firstIssue.path("fields"));
+                    
+                    // Show available field names
+                    List<String> availableFields = new ArrayList<>();
+                    firstIssue.path("fields").fieldNames().forEachRemaining(availableFields::add);
+                    debugInfo.put("availableFields", availableFields);
+                }
+                
+            } catch (Exception parseEx) {
+                debugInfo.put("parseError", parseEx.getMessage());
+            }
+
+            return debugInfo;
+
+        } catch (WebClientResponseException e) {
+            debugInfo.put("error", "HTTP " + e.getStatusCode() + ": " + e.getResponseBodyAsString());
+            return debugInfo;
+        } catch (Exception e) {
+            debugInfo.put("error", "Unexpected error: " + e.getMessage());
+            return debugInfo;
+        }
+    }
+
+    /**
      * Test connection to Jira
      */
     public boolean testConnection() {

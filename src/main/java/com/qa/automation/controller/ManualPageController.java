@@ -247,6 +247,26 @@ public class ManualPageController {
     }
 
     /**
+     * DEBUG: Get raw Jira response for debugging
+     */
+    @GetMapping("/sprints/{sprintId}/debug")
+    public ResponseEntity<Map<String, Object>> debugJiraResponse(
+            @PathVariable String sprintId,
+            @RequestParam(required = false) String jiraProjectKey,
+            @RequestParam(required = false) String jiraBoardId) {
+        try {
+            logger.info("Debug: Getting raw Jira response for sprint: {}", sprintId);
+            Map<String, Object> debugInfo = manualPageService.getDebugJiraResponse(sprintId, jiraProjectKey, jiraBoardId);
+            return ResponseEntity.ok(debugInfo);
+        } catch (Exception e) {
+            logger.error("Error getting debug Jira response: {}", e.getMessage(), e);
+            Map<String, Object> error = new HashMap<>();
+            error.put("error", e.getMessage());
+            return ResponseEntity.badRequest().body(error);
+        }
+    }
+
+    /**
      * Get automation statistics for a sprint
      */
     @GetMapping("/sprints/{sprintId}/statistics")
