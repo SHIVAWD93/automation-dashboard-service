@@ -67,10 +67,10 @@ public class JiraIntegrationService {
 
             String jql = String.format("sprint = %s AND project = %s", sprintId, projectKey);
 
-            String url = UriComponentsBuilder.fromPath("/rest/api/2/search")
+            String url = UriComponentsBuilder.fromPath("/rest/api/3/search")
                     .queryParam("jql", jql)
                     .queryParam("maxResults", 1000)
-                    .queryParam("expand", "changelog")
+                    .queryParam("expand", "changelog,renderedFields,names,schema,operations,editmeta,versionedRepresentations")
                     .build()
                     .toUriString();
 
@@ -111,7 +111,7 @@ public class JiraIntegrationService {
 
             while (hasMore) {
                 String url = String.format("/rest/agile/1.0/board/%s/sprint?startAt=%d&maxResults=%d",
-                         boardId, startAt, maxResults);
+                         boardId != null ? boardId : jiraConfig.getJiraBoardId(), startAt, maxResults);
 
 
                 logger.debug("Fetching sprints batch: startAt={}, maxResults={}", startAt, maxResults);
@@ -411,29 +411,73 @@ public class JiraIntegrationService {
 
             JiraIssueDto issueDto = new JiraIssueDto();
             issueDto.setJiraKey(key);
-            issueDto.setSummary(fields.path("summary").asText());
-            issueDto.setDescription(getTextValue(fields.path("description")));
+            
+            // Extract summary safely
+            String summary = fields.path("summary").asText();
+            if (summary == null || summary.isEmpty() || "null".equals(summary)) {
+                logger.debug("Missing summary for issue: {}", key);
+                summary = "";
+            }
+            issueDto.setSummary(summary);
+            
+            // Extract description safely
+            String description = getTextValue(fields.path("description"));
+            if (description == null || description.isEmpty() || "null".equals(description)) {
+                logger.debug("Missing description for issue: {}", key);
+                description = "";
+            }
+            issueDto.setDescription(description);
+            
             issueDto.setSprintId(sprintId);
-            issueDto.setIssueType(fields.path("issuetype").path("name").asText());
-            issueDto.setStatus(fields.path("status").path("name").asText());
+            
+            // Extract issue type safely
+            String issueType = fields.path("issuetype").path("name").asText();
+            if (issueType == null || issueType.isEmpty() || "null".equals(issueType)) {
+                logger.debug("Missing issue type for issue: {}", key);
+                issueType = "";
+            }
+            issueDto.setIssueType(issueType);
+            
+            // Extract status safely
+            String status = fields.path("status").path("name").asText();
+            if (status == null || status.isEmpty() || "null".equals(status)) {
+                logger.debug("Missing status for issue: {}", key);
+                status = "";
+            }
+            issueDto.setStatus(status);
 
             // Get priority safely
             JsonNode priorityNode = fields.path("priority");
             if (!priorityNode.isMissingNode() && !priorityNode.isNull()) {
-                issueDto.setPriority(priorityNode.path("name").asText());
+                String priority = priorityNode.path("name").asText();
+                if (priority != null && !priority.isEmpty() && !"null".equals(priority)) {
+                    issueDto.setPriority(priority);
+                }
             }
 
-            // Get assignee information
+            // Get assignee information safely
             JsonNode assigneeNode = fields.path("assignee");
             if (!assigneeNode.isMissingNode() && !assigneeNode.isNull()) {
-                issueDto.setAssignee(assigneeNode.path("name").asText());
-                issueDto.setAssigneeDisplayName(assigneeNode.path("displayName").asText());
+                String assigneeName = assigneeNode.path("name").asText();
+                String assigneeDisplayName = assigneeNode.path("displayName").asText();
+                
+                // Handle case where 'name' field might not exist (newer Jira versions use 'accountId')
+                if ((assigneeName == null || assigneeName.isEmpty() || "null".equals(assigneeName))) {
+                    assigneeName = assigneeNode.path("accountId").asText();
+                }
+                
+                if (assigneeName != null && !assigneeName.isEmpty() && !"null".equals(assigneeName)) {
+                    issueDto.setAssignee(assigneeName);
+                }
+                
+                if (assigneeDisplayName != null && !assigneeDisplayName.isEmpty() && !"null".equals(assigneeDisplayName)) {
+                    issueDto.setAssigneeDisplayName(assigneeDisplayName);
+                }
             }
 
-            // Get sprint name from sprint field
-            JsonNode sprintNode = fields.path("customfield_10020"); // This is typically the sprint field
-            if (!sprintNode.isMissingNode() && sprintNode.isArray() && sprintNode.size() > 0) {
-                String sprintName = extractSprintName(sprintNode.get(0).asText());
+            // Get sprint name from sprint field - try multiple possible sprint fields
+            String sprintName = extractSprintNameFromFields(fields, sprintId);
+            if (sprintName != null && !sprintName.isEmpty()) {
                 issueDto.setSprintName(sprintName);
             }
 
@@ -443,6 +487,9 @@ public class JiraIntegrationService {
             linkedTestCases = normalizeAndFilterTcOnly(linkedTestCases);
             
             issueDto.setLinkedTestCases(linkedTestCases);
+            
+            logger.debug("Parsed issue {}: summary='{}', status='{}', assignee='{}'", 
+                key, summary, status, issueDto.getAssignee());
 
             return issueDto;
 
@@ -450,6 +497,49 @@ public class JiraIntegrationService {
             logger.error("Error parsing issue node: {}", e.getMessage(), e);
             return null;
         }
+    }
+
+    /**
+     * Extract sprint name from various possible sprint fields
+     */
+    private String extractSprintNameFromFields(JsonNode fields, String sprintId) {
+        // Try different possible sprint field locations
+        String[] sprintFields = {
+            "customfield_10020", // Common sprint field
+            "customfield_11051", // Sprint field from the provided example
+            "sprint",
+            "sprints"
+        };
+        
+        for (String fieldName : sprintFields) {
+            JsonNode sprintNode = fields.path(fieldName);
+            if (!sprintNode.isMissingNode() && !sprintNode.isNull()) {
+                if (sprintNode.isArray() && sprintNode.size() > 0) {
+                    // Handle array of sprints
+                    for (JsonNode sprint : sprintNode) {
+                        String sprintName = extractSprintName(sprint.asText());
+                        if (sprintName != null && !sprintName.isEmpty()) {
+                            return sprintName;
+                        }
+                    }
+                } else if (sprintNode.isTextual()) {
+                    // Handle single sprint string
+                    String sprintName = extractSprintName(sprintNode.asText());
+                    if (sprintName != null && !sprintName.isEmpty()) {
+                        return sprintName;
+                    }
+                } else if (sprintNode.isObject()) {
+                    // Handle sprint object
+                    String sprintName = sprintNode.path("name").asText();
+                    if (sprintName != null && !sprintName.isEmpty() && !"null".equals(sprintName)) {
+                        return sprintName;
+                    }
+                }
+            }
+        }
+        
+        // Fallback: try to find sprint name in changelog if available
+        return null;
     }
 
     /**
