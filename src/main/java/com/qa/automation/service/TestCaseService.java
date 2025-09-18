@@ -22,6 +22,23 @@ public class TestCaseService {
 
     @Autowired
     private TesterRepository testerRepository;
+    
+    // Validation helpers
+    private void validateAndAttachManualTester(com.qa.automation.model.TestCase testCase) {
+        if (testCase.getManualTesterId() != null) {
+            Tester manualTester = testerRepository.findById(testCase.getManualTesterId()).orElse(null);
+            if (manualTester == null) {
+                throw new RuntimeException("Manual Tester not found with id: " + testCase.getManualTesterId());
+            }
+            testCase.setManualTester(manualTester);
+        } else if (testCase.getManualTester() != null && testCase.getManualTester().getId() != null) {
+            Tester manualTester = testerRepository.findById(testCase.getManualTester().getId()).orElse(null);
+            if (manualTester == null) {
+                throw new RuntimeException("Manual Tester not found with id: " + testCase.getManualTester().getId());
+            }
+            testCase.setManualTester(manualTester);
+        }
+    }
 
     public List<TestCase> getAllTestCases() {
         return testCaseRepository.findAll();
@@ -61,6 +78,9 @@ public class TestCaseService {
         } else {
             throw new RuntimeException("Tester is required for creating a test case");
         }
+
+        // Handle manual tester assignment (optional)
+        validateAndAttachManualTester(testCase);
 
         return testCaseRepository.save(testCase);
     }
@@ -102,6 +122,9 @@ public class TestCaseService {
                 }
                 testCase.setTester(tester);
             }
+
+            // Handle manual tester assignment for update (optional)
+            validateAndAttachManualTester(testCase);
 
             return testCaseRepository.save(testCase);
         }

@@ -176,8 +176,15 @@ public class ManualPageController {
             }
             Long testCaseId = Long.parseLong(testCaseIdStr.trim());
 
-            // First map project/tester if provided
-            JiraTestCaseDto dto = manualPageService.mapTestCaseToProject(testCaseId, request.getProjectId(), request.getTesterId());
+            // First map project/tester/manual plus type/tool if provided
+            JiraTestCaseDto dto = manualPageService.mapTestCaseToProject(
+                    testCaseId,
+                    request.getProjectId(),
+                    request.getTesterId(),
+                    request.getManualTesterId(),
+                    request.getTestCaseType(),
+                    request.getToolType()
+            );
             // Then update flags
             dto = manualPageService.updateTestCaseAutomationFlags(testCaseId, request.getCanBeAutomated(), request.getCannotBeAutomated());
             return ResponseEntity.ok(dto);
@@ -202,7 +209,10 @@ public class ManualPageController {
             JiraTestCaseDto updatedTestCase = manualPageService.mapTestCaseToProject(
                     testCaseId,
                     request.getProjectId(),
-                    request.getTesterId()
+                    request.getTesterId(),
+                    request.getManualTesterId(),
+                    request.getTestCaseType(),
+                    request.getToolType()
             );
             return ResponseEntity.ok(updatedTestCase);
         } catch (Exception e) {
@@ -527,6 +537,9 @@ public class ManualPageController {
     public static class TestCaseMappingRequest {
         private Long projectId;
         private Long testerId;
+        private Long manualTesterId;
+        private String testCaseType;
+        private String toolType;
 
         public Long getProjectId() {
             return projectId;
@@ -543,6 +556,13 @@ public class ManualPageController {
         public void setTesterId(Long testerId) {
             this.testerId = testerId;
         }
+
+        public Long getManualTesterId() { return manualTesterId; }
+        public void setManualTesterId(Long manualTesterId) { this.manualTesterId = manualTesterId; }
+        public String getTestCaseType() { return testCaseType; }
+        public void setTestCaseType(String testCaseType) { this.testCaseType = testCaseType; }
+        public String getToolType() { return toolType; }
+        public void setToolType(String toolType) { this.toolType = toolType; }
     }
 
     public static class KeywordSearchRequest {
@@ -593,6 +613,9 @@ public class ManualPageController {
         private Long testerId;
         private boolean canBeAutomated;
         private boolean cannotBeAutomated;
+        private Long manualTesterId;
+        private String testCaseType;
+        private String toolType;
 
         public Long getProjectId() { return projectId; }
         public void setProjectId(Long projectId) { this.projectId = projectId; }
@@ -602,5 +625,11 @@ public class ManualPageController {
         public void setCanBeAutomated(boolean canBeAutomated) { this.canBeAutomated = canBeAutomated; }
         public boolean getCannotBeAutomated() { return cannotBeAutomated; }
         public void setCannotBeAutomated(boolean cannotBeAutomated) { this.cannotBeAutomated = cannotBeAutomated; }
+        public Long getManualTesterId() { return manualTesterId; }
+        public void setManualTesterId(Long manualTesterId) { this.manualTesterId = manualTesterId; }
+        public String getTestCaseType() { return testCaseType; }
+        public void setTestCaseType(String testCaseType) { this.testCaseType = testCaseType; }
+        public String getToolType() { return toolType; }
+        public void setToolType(String toolType) { this.toolType = toolType; }
     }
 }

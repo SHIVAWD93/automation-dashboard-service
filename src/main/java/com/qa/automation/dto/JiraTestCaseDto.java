@@ -22,6 +22,12 @@ public class JiraTestCaseDto {
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 
+    // New fields for manual coverage context
+    private String testCaseType; // "API" or "UI"
+    private String toolType; // "Selenium" or "Tosca"
+    private Long manualTesterId;
+    private String manualTesterName;
+
     // Constructors
     public JiraTestCaseDto() {}
 
@@ -177,6 +183,38 @@ public class JiraTestCaseDto {
 
     public void setUpdatedAt(LocalDateTime updatedAt) {
         this.updatedAt = updatedAt;
+    }
+
+    public String getTestCaseType() {
+        return testCaseType;
+    }
+
+    public void setTestCaseType(String testCaseType) {
+        this.testCaseType = testCaseType;
+    }
+
+    public String getToolType() {
+        return toolType;
+    }
+
+    public void setToolType(String toolType) {
+        this.toolType = toolType;
+    }
+
+    public Long getManualTesterId() {
+        return manualTesterId;
+    }
+
+    public void setManualTesterId(Long manualTesterId) {
+        this.manualTesterId = manualTesterId;
+    }
+
+    public String getManualTesterName() {
+        return manualTesterName;
+    }
+
+    public void setManualTesterName(String manualTesterName) {
+        this.manualTesterName = manualTesterName;
     }
 
     // Helper methods
