@@ -42,6 +42,18 @@ public class TestCase {
     @JsonIgnoreProperties("testCases")
     private Tester tester;
 
+    // New fields
+    @Column(name = "test_case_type")
+    private String testCaseType; // "API" or "UI"
+
+    @Column(name = "tool_type")
+    private String toolType; // "Selenium" or "Tosca"
+
+    @ManyToOne(fetch = FetchType.EAGER)
+    @JoinColumn(name = "manual_tester_id")
+    @JsonIgnoreProperties("testCases")
+    private Tester manualTester;
+
     @Column(name = "created_at")
     private LocalDateTime createdAt;
 
@@ -148,6 +160,30 @@ public class TestCase {
         this.tester = tester;
     }
 
+    public String getTestCaseType() {
+        return testCaseType;
+    }
+
+    public void setTestCaseType(String testCaseType) {
+        this.testCaseType = testCaseType;
+    }
+
+    public String getToolType() {
+        return toolType;
+    }
+
+    public void setToolType(String toolType) {
+        this.toolType = toolType;
+    }
+
+    public Tester getManualTester() {
+        return manualTester;
+    }
+
+    public void setManualTester(Tester manualTester) {
+        this.manualTester = manualTester;
+    }
+
     public LocalDateTime getCreatedAt() {
         return createdAt;
     }
@@ -188,6 +224,19 @@ public class TestCase {
                 this.tester = new Tester();
             }
             this.tester.setId(testerId);
+        }
+    }
+
+    public Long getManualTesterId() {
+        return manualTester != null ? manualTester.getId() : null;
+    }
+
+    public void setManualTesterId(Long manualTesterId) {
+        if (manualTesterId != null) {
+            if (this.manualTester == null) {
+                this.manualTester = new Tester();
+            }
+            this.manualTester.setId(manualTesterId);
         }
     }
 }

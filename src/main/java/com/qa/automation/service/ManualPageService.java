@@ -256,7 +256,7 @@ public class ManualPageService {
     /**
      * Map test case to project and domain
      */
-    public JiraTestCaseDto mapTestCaseToProject(Long testCaseId, Long projectId, Long testerId) {
+    public JiraTestCaseDto mapTestCaseToProject(Long testCaseId, Long projectId, Long testerId, Long manualTesterId, String testCaseType, String toolType) {
         logger.info("Mapping test case {} to project {} and tester {}", testCaseId, projectId, testerId);
 
         Optional<JiraTestCase> optionalTestCase = jiraTestCaseRepository.findById(testCaseId);
@@ -291,6 +291,26 @@ public class ManualPageService {
                 logger.warn("Tester with ID {} does not exist, skipping tester assignment for test case: {}", testerId, testCaseId);
                 throw new RuntimeException("Tester not found with id: " + testerId);
             }
+        }
+
+        // Set manual tester with validation (optional)
+        if (manualTesterId != null) {
+            Optional<Tester> optionalManualTester = testerRepository.findById(manualTesterId);
+            if (optionalManualTester.isPresent()) {
+                testCase.setManualTester(optionalManualTester.get());
+                logger.debug("Assigned manual tester for test case {}: {}", testCaseId, optionalManualTester.get().getName());
+            } else {
+                logger.warn("Manual tester with ID {} does not exist for test case: {}", manualTesterId, testCaseId);
+                throw new RuntimeException("Manual Tester not found with id: " + manualTesterId);
+            }
+        }
+
+        // Set type and tool
+        if (testCaseType != null && !testCaseType.isBlank()) {
+            testCase.setTestCaseType(testCaseType);
+        }
+        if (toolType != null && !toolType.isBlank()) {
+            testCase.setToolType(toolType);
         }
 
         JiraTestCase savedTestCase = jiraTestCaseRepository.save(testCase);
@@ -635,6 +655,10 @@ public class ManualPageService {
             testCase.setStatus("Ready to Automate");
             testCase.setProject(jiraTestCase.getProject());
             testCase.setTester(jiraTestCase.getAssignedTester());
+            // Propagate new fields
+            testCase.setTestCaseType(jiraTestCase.getTestCaseType());
+            testCase.setToolType(jiraTestCase.getToolType());
+            testCase.setManualTester(jiraTestCase.getManualTester());
         }
 
         return testCaseService.createTestCase(testCase);
@@ -703,6 +727,14 @@ public class ManualPageService {
         // Set tester information
         if (testCase.getAssignedTester() != null) {
             dto.setAssignedTesterName(testCase.getAssignedTester().getName());
+        }
+
+        // New: Set manual coverage fields
+        dto.setTestCaseType(testCase.getTestCaseType());
+        dto.setToolType(testCase.getToolType());
+        if (testCase.getManualTester() != null) {
+            dto.setManualTesterId(testCase.getManualTester().getId());
+            dto.setManualTesterName(testCase.getManualTester().getName());
         }
 
         return dto;

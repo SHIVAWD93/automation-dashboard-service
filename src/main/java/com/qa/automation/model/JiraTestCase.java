@@ -54,6 +54,18 @@ public class JiraTestCase {
     @JsonIgnoreProperties("testCases")
     private Tester assignedTester;
 
+    // New fields for manual coverage context
+    @Column(name = "test_case_type")
+    private String testCaseType; // "API" or "UI"
+
+    @Column(name = "tool_type")
+    private String toolType; // "Selenium" or "Tosca"
+
+    @ManyToOne(fetch = FetchType.EAGER)
+    @JoinColumn(name = "manual_tester_id")
+    @JsonIgnoreProperties("testCases")
+    private Tester manualTester;
+
     @Column(name = "domain_mapped")
     private String domainMapped;
 
@@ -210,6 +222,30 @@ public class JiraTestCase {
         if (assignedTester != null) {
             this.assignedTesterId = assignedTester.getId();
         }
+    }
+
+    public String getTestCaseType() {
+        return testCaseType;
+    }
+
+    public void setTestCaseType(String testCaseType) {
+        this.testCaseType = testCaseType;
+    }
+
+    public String getToolType() {
+        return toolType;
+    }
+
+    public void setToolType(String toolType) {
+        this.toolType = toolType;
+    }
+
+    public Tester getManualTester() {
+        return manualTester;
+    }
+
+    public void setManualTester(Tester manualTester) {
+        this.manualTester = manualTester;
     }
 
     public String getDomainMapped() {
